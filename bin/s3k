@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+
+set -o errexit
+set -o pipefail
+[[ "${DEBUG}" == 'true' ]] && set -o xtrace
+
+declare -r version='0.0.1'
+
+function usage() {
+  cat <<EOF
+s3k ${version} - Do more with 'stack' by typing less!
+
+USAGE
+  s3k [OPTIONS] [--] [ARGS]
+
+OPTIONS
+  -p           Print the final command rather than executing it
+  -b REGEX     Select build target(s) via extended regex
+  -B REGEX     Same as '-b' but tests and benchmarks are not built
+  -t REGEX     Select test target(s) via extended regex
+  -T ARGS      Test arguments
+                 (be sure to quote ARGS, e.g. -T '--match Foo')
+  -r REGEX     Select run target(s) via extended regex
+  -R ARGS      Run arguments
+                 (be sure to quote ARGS, e.g. -R '-i foo.txt -o bar.txt')
+  -g REGEX     Select GHCi target(s) via extended regex
+  -G ARGS      GHCi options
+                 (be sure to quote ARGS, e.g. -G '-Wno-missing-home-modules')
+  -k WORD      Select haddock target(s) via extended regex
+  -K ARGS      Haddock arguments
+                 (be sure to quote ARGS, e.g. -K '--html --pretty-html')
+  -m REGEX     Select benchmark target(s) via extended regex
+  -M ARGS      Benchmark arguments
+                 (be sure to quote ARGS, e.g. -M '--match pattern Foo')
+  -l ALIAS     Load a project-specific command via alias
+  -s ALIAS     Save the final command to a project-specific alias
+  -e KEY=VAL   Register a project-specific environment variable
+                 (this option may be specified multiple times)
+  -E KEY       Unregister a project-specific environment variable
+                 (this option may be specified multiple times)
+  -W           Build without '--pedantic' flag
+  -x CMD       Execute an arbitrary command if the generated command succeeds
+                 (be sure to quote CMD)
+  -C           Regenerate cached project info
+  -V           Print version
+  -h           Show help
+  -H           Show verbose help
+
+ARGS
+  <STACK_ARG>  Additional arguments to pass to 'stack'
+
+               Note that these args are passed to all 'stack'
+               invocations in a generated command, not including
+               possible 'stack' invocations specified directly by the
+               user via '-x' or '-X'. A generated command will have
+               multiple 'stack' invocations if at least two of the
+               following options are present:
+
+               -b, -B, -t, -r, -g, -k, -m
+
+               Considering the above warning, it is typically only
+               useful to supply STACK_ARG arguments when lasering in
+               on a specific task with 's3k', whether that task is
+               building, testing, running a binary, etc.
+
+               If 's3k' is invoked with only STACK_ARG arguments and no
+               options, then 's3k' is effectively a pass-through wrapper
+               around 'stack' itself with a name that is two characters
+               shorter.
+EOF
+}
+
+function detailedUsage() {
+  usage
+  cat <<EOF
+
+DETAILS
+
+This script is a wrapper around 'stack'. STUB.
+
+EXAMPLES
+
+View the script's help:
+$ s3k -h
+EOF
+}
+
+function main() {
+  usage
+}
+
+main "$@"
