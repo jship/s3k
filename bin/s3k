@@ -86,7 +86,9 @@ EOF
 }
 
 function parseArgs() {
+  local OPTARG
   local OPTIND
+  local _opt
 
   local _behavior='execute'
   local _fullBuildTargetRegex=''
@@ -191,7 +193,7 @@ function parseArgs() {
     _benchmarkArgs=''
   fi
 
-  local _envVarsToRegisterJSON='null'
+  local _envVarsToRegisterJSON='[]'
   if [ "${#_envVarsToRegister[@]}" -gt 0 ]; then
     _envVarsToRegisterJSON=$( \
       printf '%s\n' "${_envVarsToRegister[@]}" | jq -nR \
@@ -207,7 +209,7 @@ function parseArgs() {
     )
   fi
 
-  local _envVarsToUnregisterJSON='null'
+  local _envVarsToUnregisterJSON='[]'
   if [ "${#_envVarsToUnregister[@]}" -gt 0 ]; then
     _envVarsToUnregisterJSON=$( \
       printf '%s\n' "${_envVarsToUnregister[@]}" | jq -nR \
@@ -218,7 +220,7 @@ function parseArgs() {
     )
   fi
 
-  local _stackArgsJSON='null'
+  local _stackArgsJSON='[]'
   if [ "$#" -gt 0 ]; then
     _stackArgsJSON=$( \
       printf '%s\n' "$@" | jq -nR \
@@ -274,37 +276,14 @@ function parseArgs() {
     | .regenProjectCache |= $regenProjectCache
     | .printVersion |= $printVersion
     | .stackArgs |= $stackArgs
-    ' <<< '{
-       "behavior": null,
-       "fullBuildTargetRegex": null,
-       "buildTargetRegex": null,
-       "testTargetRegex": null,
-       "testArgs": null,
-       "runTargetRegex": null,
-       "runArgs": null,
-       "ghciTargetRegex": null,
-       "ghciArgs": null,
-       "haddockTargetRegex": null,
-       "haddockArgs": null,
-       "benchmarkTargetRegex": null,
-       "benchmarkArgs": null,
-       "loadAlias": null,
-       "saveAlias": null,
-       "envVarsToRegister": null,
-       "envVarsToUnregister": null,
-       "buildWithPedanticFlag": null,
-       "arbitraryCommand": null,
-       "regenProjectCache": null,
-       "printVersion": null,
-       "stackArgs": null
-     }'
+    '
 }
 
 function main() {
   local _opts
   _opts=$(parseArgs "$@")
 
-  echo "${_opts}"
+  echo "${_opts}" | jq
 }
 
 main "$@"
