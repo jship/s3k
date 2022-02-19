@@ -85,8 +85,220 @@ $ s3k -h
 EOF
 }
 
+function parseArgs() {
+  local OPTIND
+
+  local _behavior='execute'
+  local _fullBuildTargetRegex=''
+  local _buildTargetRegex=''
+  local _testTargetRegex=''
+  local _testArgs=''
+  local _runTargetRegex=''
+  local _runArgs=''
+  local _ghciTargetRegex=''
+  local _ghciArgs=''
+  local _haddockTargetRegex=''
+  local _haddockArgs=''
+  local _benchmarkTargetRegex=''
+  local _benchmarkArgs=''
+  local _loadAlias=''
+  local _saveAlias=''
+  local _envVarsToRegister=()
+  local _envVarsToUnregister=()
+  local _buildWithPedanticFlag='true'
+  local _arbitraryCommand=''
+  local _regenProjectCache='false'
+  local _printVersion='false'
+
+  while getopts pb:B:t:T:r:R:g:G:k:K:m:M:l:s:e:E:Wx:CVhH _opt; do
+    case "${_opt}" in
+      p)
+        _behavior='print';;
+      b)
+        _fullBuildTargetRegex="${OPTARG}";;
+      B)
+        _buildTargetRegex="${OPTARG}";;
+      t)
+        _testTargetRegex="${OPTARG}";;
+      T)
+        _testArgs="${OPTARG}";;
+      r)
+        _runTargetRegex="${OPTARG}";;
+      R)
+        _runArgs="${OPTARG}";;
+      g)
+        _ghciTargetRegex="${OPTARG}";;
+      G)
+        _ghciArgs="${OPTARG}";;
+      k)
+        _haddockTargetRegex="${OPTARG}";;
+      K)
+        _haddockArgs="${OPTARG}";;
+      m)
+        _benchmarkTargetRegex="${OPTARG}";;
+      M)
+        _benchmarkArgs="${OPTARG}";;
+      l)
+        _loadAlias="${OPTARG}";;
+      s)
+        _saveAlias="${OPTARG}";;
+      e)
+        _envVarsToRegister+=("${OPTARG}");;
+      E)
+        _envVarsToUnregister+=("${OPTARG}");;
+      W)
+        _buildWithPedanticFlag='false';;
+      x)
+        _arbitraryCommand="${OPTARG}";;
+      C)
+        _regenProjectCache='true';;
+      V)
+        _printVersion='true';;
+      h)
+        usage
+        exit 0
+        ;;
+      H)
+        detailedUsage
+        exit 0
+        ;;
+      \?)
+        usage >&2
+        exit 1
+        ;;
+    esac
+  done
+
+  shift $((OPTIND - 1))
+
+  if [ -z "${_testTargetRegex}" ] && [ -n "${_testArgs}" ]; then
+    _testArgs=''
+  fi
+
+  if [ -z "${_runTargetRegex}" ] && [ -n "${_runArgs}" ]; then
+    _runArgs=''
+  fi
+
+  if [ -z "${_ghciTargetRegex}" ] && [ -n "${_ghciArgs}" ]; then
+    _ghciArgs=''
+  fi
+
+  if [ -z "${_haddockTargetRegex}" ] && [ -n "${_haddockArgs}" ]; then
+    _haddockArgs=''
+  fi
+
+  if [ -z "${_benchmarkTargetRegex}" ] && [ -n "${_benchmarkArgs}" ]; then
+    _benchmarkArgs=''
+  fi
+
+  local _envVarsToRegisterJSON
+  _envVarsToRegisterJSON=$( \
+    printf '%s\n' "${_envVarsToRegister[@]}" | jq -nR \
+      '[ inputs
+       | split("=")
+       | { key: .[0]
+         , value: .[1:] | join("")
+         }
+       | select(
+           (.key | test("^[A-Za-z][A-Za-z0-9_]*$")) and (.value | length > 0)
+         )
+       ]'
+  )
+
+  local _envVarsToUnregisterJSON
+  _envVarsToUnregisterJSON=$( \
+    printf '%s\n' "${_envVarsToUnregister[@]}" | jq -nR \
+      '[ inputs
+       | select(test("^[A-Za-z][A-Za-z0-9_]*$"))
+       | { key: . }
+       ]'
+  )
+
+  local _stackArgsJSON
+  _stackArgsJSON=$( \
+    printf '%s\n' "$@" | jq -nR \
+     '[ inputs
+      | select(test("^\\s*$") | not)
+      ]'
+  )
+
+  jq -n \
+    --arg behavior "${_behavior}"  \
+    --arg fullBuildTargetRegex "${_fullBuildTargetRegex}" \
+    --arg buildTargetRegex "${_buildTargetRegex}" \
+    --arg testTargetRegex "${_testTargetRegex}" \
+    --arg testArgs "${_testArgs}" \
+    --arg runTargetRegex "${_runTargetRegex}" \
+    --arg runArgs "${_runArgs}" \
+    --arg ghciTargetRegex "${_ghciTargetRegex}" \
+    --arg ghciArgs "${_ghciArgs}" \
+    --arg haddockTargetRegex "${_haddockTargetRegex}" \
+    --arg haddockArgs "${_haddockArgs}" \
+    --arg benchmarkTargetRegex "${_benchmarkTargetRegex}" \
+    --arg benchmarkArgs "${_benchmarkArgs}" \
+    --arg loadAlias "${_loadAlias}" \
+    --arg saveAlias "${_saveAlias}" \
+    --argjson envVarsToRegister "${_envVarsToRegisterJSON}" \
+    --argjson envVarsToUnregister "${_envVarsToUnregisterJSON}" \
+    --argjson buildWithPedanticFlag "${_buildWithPedanticFlag}" \
+    --arg arbitraryCommand "${_arbitraryCommand}" \
+    --argjson regenProjectCache "${_regenProjectCache}" \
+    --argjson printVersion "${_printVersion}" \
+    --argjson stackArgs "${_stackArgsJSON}" \
+    ' def nullIfEmpty: if . == "" then null else . end;
+      .behavior |= $behavior
+    | .fullBuildTargetRegex |= ($fullBuildTargetRegex | nullIfEmpty)
+    | .buildTargetRegex |= ($buildTargetRegex | nullIfEmpty)
+    | .testTargetRegex |= ($testTargetRegex | nullIfEmpty)
+    | .testArgs |= ($testArgs | nullIfEmpty)
+    | .runTargetRegex |= ($runTargetRegex | nullIfEmpty)
+    | .runArgs |= ($runArgs | nullIfEmpty)
+    | .ghciTargetRegex |= ($ghciTargetRegex | nullIfEmpty)
+    | .ghciArgs |= ($ghciArgs | nullIfEmpty)
+    | .haddockTargetRegex |= ($haddockTargetRegex | nullIfEmpty)
+    | .haddockArgs |= ($haddockArgs | nullIfEmpty)
+    | .benchmarkTargetRegex |= ($benchmarkTargetRegex | nullIfEmpty)
+    | .benchmarkArgs |= ($benchmarkArgs | nullIfEmpty)
+    | .loadAlias |= ($loadAlias | nullIfEmpty)
+    | .saveAlias |= ($saveAlias | nullIfEmpty)
+    | .envVarsToRegister |= $envVarsToRegister
+    | .envVarsToUnregister |= $envVarsToUnregister
+    | .buildWithPedanticFlag |= $buildWithPedanticFlag
+    | .arbitraryCommand |= ($arbitraryCommand | nullIfEmpty)
+    | .regenProjectCache |= $regenProjectCache
+    | .printVersion |= $printVersion
+    | .stackArgs |= $stackArgs
+    ' <<< '{
+       "behavior": null,
+       "fullBuildTargetRegex": null,
+       "buildTargetRegex": null,
+       "testTargetRegex": null,
+       "testArgs": null,
+       "runTargetRegex": null,
+       "runArgs": null,
+       "ghciTargetRegex": null,
+       "ghciArgs": null,
+       "haddockTargetRegex": null,
+       "haddockArgs": null,
+       "benchmarkTargetRegex": null,
+       "benchmarkArgs": null,
+       "loadAlias": null,
+       "saveAlias": null,
+       "envVarsToRegister": null,
+       "envVarsToUnregister": null,
+       "buildWithPedanticFlag": null,
+       "arbitraryCommand": null,
+       "regenProjectCache": null,
+       "printVersion": null,
+       "stackArgs": null
+     }'
+}
+
 function main() {
-  usage
+  local _opts
+  _opts=$(parseArgs "$@")
+
+  echo "${_opts}" | jq
 }
 
 main "$@"
