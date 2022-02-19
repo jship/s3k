@@ -4,7 +4,7 @@ set -o errexit
 set -o pipefail
 [[ "${DEBUG}" == 'true' ]] && set -o xtrace
 
-declare -r version='0.0.1'
+declare -r version='0.0.0'
 
 function usage() {
   cat <<EOF
@@ -85,7 +85,39 @@ $ s3k -h
 EOF
 }
 
+function findJqOrDie() {
+  local _jq=''
+  if [ -x "${S3K_PATH_JQ}" ]; then
+    _jq="${S3K_PATH_JQ}"
+  elif command -v 'jq' &>/dev/null; then
+    _jq='jq'
+  else
+    echo "s3k: 'jq' binary not found on runtime path or S3K_PATH_JQ" >&2
+    exit 1
+  fi
+
+  echo "${_jq}"
+}
+
+function findStackOrDie() {
+  local _stack=''
+  if [ -x "${S3K_PATH_STACK}" ]; then
+    _stack="${S3K_PATH_STACK}"
+  elif command -v 'stack' &>/dev/null; then
+    _stack='stack'
+  else
+    echo "s3k: 'stack' binary not found on runtime path or S3K_PATH_STACK" >&2
+    exit 1
+  fi
+
+  echo "${_stack}"
+}
+
+# $1: Path to 'jq'
 function parseArgs() {
+  local _jq="$1"
+  shift 1
+
   local OPTARG
   local OPTIND
   local _opt
@@ -196,7 +228,7 @@ function parseArgs() {
   local _envVarsToRegisterJSON='[]'
   if [ "${#_envVarsToRegister[@]}" -gt 0 ]; then
     _envVarsToRegisterJSON=$( \
-      printf '%s\n' "${_envVarsToRegister[@]}" | jq -nR \
+      printf '%s\n' "${_envVarsToRegister[@]}" | "$(findJqOrDie)" -nR \
         '[ inputs
          | split("=")
          | { key: .[0]
@@ -230,7 +262,10 @@ function parseArgs() {
     )
   fi
 
-  jq -n \
+  # We disable SC2016 because it is spuriously detected due to us using a
+  # variable for the path to 'jq' rather than using 'jq' directly.
+  # shellcheck disable=SC2016
+  "${_jq}" -n \
     --arg behavior "${_behavior}"  \
     --arg fullBuildTargetRegex "${_fullBuildTargetRegex}" \
     --arg buildTargetRegex "${_buildTargetRegex}" \
@@ -279,11 +314,82 @@ function parseArgs() {
     '
 }
 
-function main() {
-  local _opts
-  _opts=$(parseArgs "$@")
+function shouldPrintVersion() {
+  return 1
+}
 
-  echo "${_opts}" | jq
+function printVersion() {
+  echo "${version}"
+  exit 0
+}
+
+function initConfigFile() {
+  return 0
+}
+
+shouldRegenerateProjectCache() {
+  return 1
+}
+
+function initProjectCache() {
+  return 0
+}
+
+function regenerateProjectCache() {
+  echo "updating project cache!"
+  return 0
+}
+
+function shouldSaveAlias() {
+  return 1
+}
+
+function saveAlias() {
+  echo "adding alias!"
+  return 0
+}
+
+function shouldLoadAlias() {
+  return 1
+}
+
+function loadAlias() {
+  echo "loading alias!"
+  return 0
+}
+
+function generateCommandList() {
+  return 0
+}
+
+function processCommandList() {
+  return 0
+}
+
+function main() {
+  local _jq
+  _jq="$(findJqOrDie)"
+
+  local _stack
+  _stack="$(findStackOrDie)"
+
+  local _projectRoot
+  _projectRoot="$("${_stack}" path --project-root 2>/dev/null)"
+
+  local _opts
+  _opts=$(parseArgs "${_jq}" "$@")
+
+  shouldPrintVersion && printVersion
+
+  initProjectCache
+  shouldRegenerateProjectCache && regenerateProjectCache
+
+  initConfigFile
+  shouldLoadAlias && loadAlias
+  shouldSaveAlias && saveAlias
+
+  generateCommandList
+  processCommandList
 }
 
 main "$@"
