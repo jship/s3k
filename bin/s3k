@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2016
+
+# Example of using subshell so that env vars only have to be set once.
+# (export TEST=42; bin/test.sh && bin/test.sh)
 
 set -o errexit
 set -o pipefail
@@ -34,9 +38,7 @@ OPTIONS
                  (be sure to quote ARGS, e.g. -M '--match pattern Foo')
   -l ALIAS     Load a project-specific command via alias
   -s ALIAS     Save the final command to a project-specific alias
-  -e KEY=VAL   Register a project-specific environment variable
-                 (this option may be specified multiple times)
-  -E KEY       Unregister a project-specific environment variable
+  -e KEY=VAL   Use an environment variable in the final command
                  (this option may be specified multiple times)
   -W           Build without '--pedantic' flag
   -x CMD       Execute an arbitrary command if the generated command succeeds
@@ -113,7 +115,6 @@ function findStackOrDie() {
   echo "${_stack}"
 }
 
-# $1: Path to 'jq'
 function parseArgs() {
   local _jq="$1"
   shift 1
@@ -138,13 +139,12 @@ function parseArgs() {
   local _loadAlias=''
   local _saveAlias=''
   local _envVarsToRegister=()
-  local _envVarsToUnregister=()
   local _buildWithPedanticFlag='true'
   local _arbitraryCommand=''
   local _regenProjectCache='false'
   local _printVersion='false'
 
-  while getopts pb:B:t:T:r:R:g:G:k:K:m:M:l:s:e:E:Wx:CVhH _opt; do
+  while getopts pb:B:t:T:r:R:g:G:k:K:m:M:l:s:e:Wx:CVhH _opt; do
     case "${_opt}" in
       p)
         _behavior='print';;
@@ -178,8 +178,6 @@ function parseArgs() {
         _saveAlias="${OPTARG}";;
       e)
         _envVarsToRegister+=("${OPTARG}");;
-      E)
-        _envVarsToUnregister+=("${OPTARG}");;
       W)
         _buildWithPedanticFlag='false';;
       x)
@@ -241,17 +239,6 @@ function parseArgs() {
     )
   fi
 
-  local _envVarsToUnregisterJSON='[]'
-  if [ "${#_envVarsToUnregister[@]}" -gt 0 ]; then
-    _envVarsToUnregisterJSON=$( \
-      printf '%s\n' "${_envVarsToUnregister[@]}" | jq -nR \
-        '[ inputs
-         | select(test("^[A-Za-z][A-Za-z0-9_]*$"))
-         | { key: . }
-         ]'
-    )
-  fi
-
   local _stackArgsJSON='[]'
   if [ "$#" -gt 0 ]; then
     _stackArgsJSON=$( \
@@ -262,9 +249,6 @@ function parseArgs() {
     )
   fi
 
-  # We disable SC2016 because it is spuriously detected due to us using a
-  # variable for the path to 'jq' rather than using 'jq' directly.
-  # shellcheck disable=SC2016
   "${_jq}" -nS \
     --arg behavior "${_behavior}"  \
     --arg fullBuildTargetRegex "${_fullBuildTargetRegex}" \
@@ -282,41 +266,40 @@ function parseArgs() {
     --arg loadAlias "${_loadAlias}" \
     --arg saveAlias "${_saveAlias}" \
     --argjson envVarsToRegister "${_envVarsToRegisterJSON}" \
-    --argjson envVarsToUnregister "${_envVarsToUnregisterJSON}" \
     --argjson buildWithPedanticFlag "${_buildWithPedanticFlag}" \
     --arg arbitraryCommand "${_arbitraryCommand}" \
     --argjson regenProjectCache "${_regenProjectCache}" \
     --argjson printVersion "${_printVersion}" \
-    --argjson stackArgs "${_stackArgsJSON}" \
-    ' def nullIfEmptyString: if . == "" then null else . end;
+    --argjson stackArgs "${_stackArgsJSON}" '
+      def nullIfEmptyString: if . == "" then null else . end;
       def emptyArrayIfEmptyString: if . == "" then [] else [.] end;
-      .behavior |= $behavior
-    | .fullBuildTargetRegex |= ($fullBuildTargetRegex | emptyArrayIfEmptyString)
-    | .buildTargetRegex |= ($buildTargetRegex | emptyArrayIfEmptyString)
-    | .testTargetRegex |= ($testTargetRegex | emptyArrayIfEmptyString)
-    | .testArgs |= ($testArgs | emptyArrayIfEmptyString)
-    | .runTargetRegex |= ($runTargetRegex | emptyArrayIfEmptyString)
-    | .runArgs |= ($runArgs | emptyArrayIfEmptyString)
-    | .ghciTargetRegex |= ($ghciTargetRegex | emptyArrayIfEmptyString)
-    | .ghciArgs |= ($ghciArgs | emptyArrayIfEmptyString)
-    | .haddockTargetRegex |= ($haddockTargetRegex | emptyArrayIfEmptyString)
-    | .haddockArgs |= ($haddockArgs | emptyArrayIfEmptyString)
-    | .benchmarkTargetRegex |= ($benchmarkTargetRegex | emptyArrayIfEmptyString)
-    | .benchmarkArgs |= ($benchmarkArgs | emptyArrayIfEmptyString)
-    | .loadAlias |= ($loadAlias | nullIfEmptyString)
-    | .saveAlias |= ($saveAlias | nullIfEmptyString)
-    | .envVarsToRegister |= $envVarsToRegister
-    | .envVarsToUnregister |= $envVarsToUnregister
-    | .buildWithPedanticFlag |= $buildWithPedanticFlag
-    | .arbitraryCommand |= ($arbitraryCommand | emptyArrayIfEmptyString)
-    | .regenProjectCache |= $regenProjectCache
-    | .printVersion |= $printVersion
-    | .stackArgs |= $stackArgs
-    '
+        .behavior |= $behavior
+      | .fullBuildTargetRegex |= ($fullBuildTargetRegex | emptyArrayIfEmptyString)
+      | .buildTargetRegex |= ($buildTargetRegex | emptyArrayIfEmptyString)
+      | .testTargetRegex |= ($testTargetRegex | emptyArrayIfEmptyString)
+      | .testArgs |= ($testArgs | emptyArrayIfEmptyString)
+      | .runTargetRegex |= ($runTargetRegex | emptyArrayIfEmptyString)
+      | .runArgs |= ($runArgs | emptyArrayIfEmptyString)
+      | .ghciTargetRegex |= ($ghciTargetRegex | emptyArrayIfEmptyString)
+      | .ghciArgs |= ($ghciArgs | emptyArrayIfEmptyString)
+      | .haddockTargetRegex |= ($haddockTargetRegex | emptyArrayIfEmptyString)
+      | .haddockArgs |= ($haddockArgs | emptyArrayIfEmptyString)
+      | .benchmarkTargetRegex |= ($benchmarkTargetRegex | emptyArrayIfEmptyString)
+      | .benchmarkArgs |= ($benchmarkArgs | emptyArrayIfEmptyString)
+      | .loadAlias |= ($loadAlias | nullIfEmptyString)
+      | .saveAlias |= ($saveAlias | nullIfEmptyString)
+      | .envVarsToRegister |= $envVarsToRegister
+      | .buildWithPedanticFlag |= $buildWithPedanticFlag
+      | .arbitraryCommand |= ($arbitraryCommand | emptyArrayIfEmptyString)
+      | .regenProjectCache |= $regenProjectCache
+      | .printVersion |= $printVersion
+      | .stackArgs |= $stackArgs
+      '
 }
 
 function shouldPrintVersion() {
-  return 1
+  local _opts="$1"
+  jq -e '.printVersion' > /dev/null <<< "${_opts}"
 }
 
 function printVersion() {
@@ -324,8 +307,49 @@ function printVersion() {
   exit 0
 }
 
-function initConfigFile() {
-  return 0
+function findConfigFile() {
+  local _jq="$1"
+
+  local _configHome=''
+  if [ -f "${S3K_CONFIG_HOME}" ]; then
+    _configHome="${S3K_CONFIG_HOME}"
+  elif [ -d "${XDG_CONFIG_HOME}" ]; then
+    _configHome="${XDG_CONFIG_HOME}/s3k"
+  elif [ -d "${HOME}" ]; then
+    _configHome="${HOME}/.s3k"
+  else
+    echo "s3k: Unable to find config dir. You can declare a dir via S3K_CONFIG_HOME?" >&2
+    exit 1
+  fi
+
+  mkdir -p "${_configHome}"
+
+  local _configFile
+  _configFile="${_configHome}/config.json"
+
+  if [ ! -f "${_configFile}" ]; then
+    "${_jq}" -S '.createdAt |= (now | todateiso8601)' \
+      <<< '{"createdAt": null, "projects": {}}' \
+      > "${_configFile}"
+  fi
+
+  echo "${_configFile}"
+}
+
+function addProjectToConfigFile() {
+  local _jq="$1"
+  local _configFile="$2"
+  local _projRoot="$3"
+
+  local _tempFile
+  _tempFile="$(mktemp)"
+  cp "${_configFile}" "${_tempFile}"
+
+  if ! "${_jq}" -e --arg projKey "${_projRoot}" '.projects | has($projKey)' \
+    > /dev/null < "${_tempFile}"; then
+    "${_jq}" -S --arg projKey "${_projRoot}" '.projects += {($projKey): {}}' \
+      > "${_configFile}" < "${_tempFile}"
+  fi
 }
 
 shouldRegenerateProjectCache() {
@@ -370,24 +394,28 @@ function main() {
   local _stack
   _stack="$(findStackOrDie)"
 
-  local _projectRoot
-  _projectRoot="$("${_stack}" path --project-root 2>/dev/null)"
+  local _projRoot
+  _projRoot="$("${_stack}" path --project-root 2>/dev/null)"
 
   local _opts
-  _opts=$(parseArgs "${_jq}" "$@")
+  _opts="$(parseArgs "${_jq}" "$@")"
 
-  shouldPrintVersion && printVersion
+  shouldPrintVersion "${_opts}" && printVersion
+
+  local _configFile
+  _configFile="$(findConfigFile "${_jq}")"
+
+  addProjectToConfigFile "${_jq}" "${_configFile}" "${_projRoot}"
 
   initProjectCache
   shouldRegenerateProjectCache && regenerateProjectCache
 
-  initConfigFile
   shouldLoadAlias && loadAlias
   shouldSaveAlias && saveAlias
 
   processCommandList
 
-  echo "${_opts}" | jq
+  jq < "$(findConfigFile "${_jq}")"
 }
 
 main "$@"
