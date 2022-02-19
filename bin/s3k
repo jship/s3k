@@ -191,36 +191,42 @@ function parseArgs() {
     _benchmarkArgs=''
   fi
 
-  local _envVarsToRegisterJSON
-  _envVarsToRegisterJSON=$( \
-    printf '%s\n' "${_envVarsToRegister[@]}" | jq -nR \
-      '[ inputs
-       | split("=")
-       | { key: .[0]
-         , value: .[1:] | join("")
-         }
-       | select(
-           (.key | test("^[A-Za-z][A-Za-z0-9_]*$")) and (.value | length > 0)
-         )
-       ]'
-  )
+  local _envVarsToRegisterJSON='null'
+  if [ "${#_envVarsToRegister[@]}" -gt 0 ]; then
+    _envVarsToRegisterJSON=$( \
+      printf '%s\n' "${_envVarsToRegister[@]}" | jq -nR \
+        '[ inputs
+         | split("=")
+         | { key: .[0]
+           , value: .[1:] | join("")
+           }
+         | select(
+             (.key | test("^[A-Za-z][A-Za-z0-9_]*$")) and (.value | length > 0)
+           )
+         ]'
+    )
+  fi
 
-  local _envVarsToUnregisterJSON
-  _envVarsToUnregisterJSON=$( \
-    printf '%s\n' "${_envVarsToUnregister[@]}" | jq -nR \
-      '[ inputs
-       | select(test("^[A-Za-z][A-Za-z0-9_]*$"))
-       | { key: . }
-       ]'
-  )
+  local _envVarsToUnregisterJSON='null'
+  if [ "${#_envVarsToUnregister[@]}" -gt 0 ]; then
+    _envVarsToUnregisterJSON=$( \
+      printf '%s\n' "${_envVarsToUnregister[@]}" | jq -nR \
+        '[ inputs
+         | select(test("^[A-Za-z][A-Za-z0-9_]*$"))
+         | { key: . }
+         ]'
+    )
+  fi
 
-  local _stackArgsJSON
-  _stackArgsJSON=$( \
-    printf '%s\n' "$@" | jq -nR \
-     '[ inputs
-      | select(test("^\\s*$") | not)
-      ]'
-  )
+  local _stackArgsJSON='null'
+  if [ "$#" -gt 0 ]; then
+    _stackArgsJSON=$( \
+      printf '%s\n' "$@" | jq -nR \
+       '[ inputs
+        | select(test("^\\s*$") | not)
+        ]'
+    )
+  fi
 
   jq -n \
     --arg behavior "${_behavior}"  \
@@ -298,7 +304,7 @@ function main() {
   local _opts
   _opts=$(parseArgs "$@")
 
-  echo "${_opts}" | jq
+  echo "${_opts}"
 }
 
 main "$@"
