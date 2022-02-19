@@ -265,7 +265,7 @@ function parseArgs() {
   # We disable SC2016 because it is spuriously detected due to us using a
   # variable for the path to 'jq' rather than using 'jq' directly.
   # shellcheck disable=SC2016
-  "${_jq}" -n \
+  "${_jq}" -nS \
     --arg behavior "${_behavior}"  \
     --arg fullBuildTargetRegex "${_fullBuildTargetRegex}" \
     --arg buildTargetRegex "${_buildTargetRegex}" \
@@ -288,26 +288,27 @@ function parseArgs() {
     --argjson regenProjectCache "${_regenProjectCache}" \
     --argjson printVersion "${_printVersion}" \
     --argjson stackArgs "${_stackArgsJSON}" \
-    ' def nullIfEmpty: if . == "" then null else . end;
+    ' def nullIfEmptyString: if . == "" then null else . end;
+      def emptyArrayIfEmptyString: if . == "" then [] else [.] end;
       .behavior |= $behavior
-    | .fullBuildTargetRegex |= ($fullBuildTargetRegex | nullIfEmpty)
-    | .buildTargetRegex |= ($buildTargetRegex | nullIfEmpty)
-    | .testTargetRegex |= ($testTargetRegex | nullIfEmpty)
-    | .testArgs |= ($testArgs | nullIfEmpty)
-    | .runTargetRegex |= ($runTargetRegex | nullIfEmpty)
-    | .runArgs |= ($runArgs | nullIfEmpty)
-    | .ghciTargetRegex |= ($ghciTargetRegex | nullIfEmpty)
-    | .ghciArgs |= ($ghciArgs | nullIfEmpty)
-    | .haddockTargetRegex |= ($haddockTargetRegex | nullIfEmpty)
-    | .haddockArgs |= ($haddockArgs | nullIfEmpty)
-    | .benchmarkTargetRegex |= ($benchmarkTargetRegex | nullIfEmpty)
-    | .benchmarkArgs |= ($benchmarkArgs | nullIfEmpty)
-    | .loadAlias |= ($loadAlias | nullIfEmpty)
-    | .saveAlias |= ($saveAlias | nullIfEmpty)
+    | .fullBuildTargetRegex |= ($fullBuildTargetRegex | emptyArrayIfEmptyString)
+    | .buildTargetRegex |= ($buildTargetRegex | emptyArrayIfEmptyString)
+    | .testTargetRegex |= ($testTargetRegex | emptyArrayIfEmptyString)
+    | .testArgs |= ($testArgs | emptyArrayIfEmptyString)
+    | .runTargetRegex |= ($runTargetRegex | emptyArrayIfEmptyString)
+    | .runArgs |= ($runArgs | emptyArrayIfEmptyString)
+    | .ghciTargetRegex |= ($ghciTargetRegex | emptyArrayIfEmptyString)
+    | .ghciArgs |= ($ghciArgs | emptyArrayIfEmptyString)
+    | .haddockTargetRegex |= ($haddockTargetRegex | emptyArrayIfEmptyString)
+    | .haddockArgs |= ($haddockArgs | emptyArrayIfEmptyString)
+    | .benchmarkTargetRegex |= ($benchmarkTargetRegex | emptyArrayIfEmptyString)
+    | .benchmarkArgs |= ($benchmarkArgs | emptyArrayIfEmptyString)
+    | .loadAlias |= ($loadAlias | nullIfEmptyString)
+    | .saveAlias |= ($saveAlias | nullIfEmptyString)
     | .envVarsToRegister |= $envVarsToRegister
     | .envVarsToUnregister |= $envVarsToUnregister
     | .buildWithPedanticFlag |= $buildWithPedanticFlag
-    | .arbitraryCommand |= ($arbitraryCommand | nullIfEmpty)
+    | .arbitraryCommand |= ($arbitraryCommand | emptyArrayIfEmptyString)
     | .regenProjectCache |= $regenProjectCache
     | .printVersion |= $printVersion
     | .stackArgs |= $stackArgs
@@ -358,10 +359,6 @@ function loadAlias() {
   return 0
 }
 
-function generateCommandList() {
-  return 0
-}
-
 function processCommandList() {
   return 0
 }
@@ -388,8 +385,9 @@ function main() {
   shouldLoadAlias && loadAlias
   shouldSaveAlias && saveAlias
 
-  generateCommandList
   processCommandList
+
+  echo "${_opts}" | jq
 }
 
 main "$@"
