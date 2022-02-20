@@ -449,15 +449,31 @@ function regenProjectCache() {
     > "${_cacheDir}/ghci-targets"
 }
 
-function shouldLoadAlias() {
-  # TODO: Implement me!
-  return 1
-}
-
 function loadAlias() {
-  # TODO: Implement me!
-  echo "loading alias!"
-  return 0
+  local _jq="$1"
+  local _opts="$2"
+
+  "${_jq}" \
+    '.loadAlias //
+       {
+         "fullBuildTargetRegex": [],
+         "buildTargetRegex": [],
+         "testTargetRegex": [],
+         "testArgs": [],
+         "runTargetRegex": [],
+         "runArgs": [],
+         "ghciTargetRegex": [],
+         "ghciArgs": [],
+         "haddockTargetRegex": [],
+         "haddockArgs": [],
+         "benchTargetRegex": [],
+         "benchArgs": [],
+         "envVars": [],
+         "buildWithPedanticFlag": false,
+         "arbitraryCommand": [],
+         "stackArgs": []
+       }
+    ' <<< "${_opts}"
 }
 
 function shouldSaveAlias() {
@@ -551,12 +567,10 @@ function processCommandList() {
   if [ -n "${_buildWithPedanticFlag}" ]; then
     _testCommand+=('--pedantic')
   fi
-  local _testArgs=()
-  while IFS='' read -r _line; do
-    _testArgs+=("${_line}")
-  done < <(jq -r '.testArgs[]' <<< "${_opts}")
-  if [ "${#_testArgs[@]}" -gt 0 ]; then
-    _testCommand+=('--test-arguments' "'${_testArgs[@]}'")
+  local _testArgs=''
+  _testArgs=$(jq -r '.testArgs | if . == [] then empty else join (" ") | @sh end' <<< "${_opts}")
+  if [ -n "${_testArgs}" ]; then
+    _testCommand+=('--test-arguments' "${_testArgs}")
   fi
   local _testTargets=()
   local _testTargetRegex=()
@@ -588,12 +602,10 @@ function processCommandList() {
   if [ -n "${_buildWithPedanticFlag}" ]; then
     _haddockCommand+=('--pedantic')
   fi
-  local _haddockArgs=()
-  while IFS='' read -r _line; do
-    _haddockArgs+=("${_line}")
-  done < <(jq -r '.haddockArgs[]' <<< "${_opts}")
-  if [ "${#_haddockArgs[@]}" -gt 0 ]; then
-    _haddockCommand+=('--haddock-arguments' "'${_haddockArgs[@]}'")
+  local _haddockArgs=''
+  _haddockArgs=$(jq -r '.haddockArgs | if . == [] then empty else join (" ") | @sh end' <<< "${_opts}")
+  if [ -n "${_haddockArgs}" ]; then
+    _haddockCommand+=('--haddock-arguments' "${_haddockArgs}")
   fi
   local _haddockTargets=()
   local _haddockTargetRegex=()
@@ -625,13 +637,10 @@ function processCommandList() {
   if [ -n "${_buildWithPedanticFlag}" ]; then
     _benchCommand+=('--pedantic')
   fi
-  local _benchArgs=()
-  while IFS='' read -r _line; do
-    _benchArgs+=("${_line}")
-  done < <(jq -r '.benchArgs[]' <<< "${_opts}")
-
-  if [ "${#_benchArgs[@]}" -gt 0 ]; then
-    _benchCommand+=('--bench-arguments' "'${_benchArgs[@]}'")
+  local _benchArgs=''
+  _benchArgs=$(jq -r '.benchArgs | if . == [] then empty else join (" ") | @sh end' <<< "${_opts}")
+  if [ -n "${_benchArgs}" ]; then
+    _benchCommand+=('--bench-arguments' "${_benchArgs}")
   fi
   local _benchTargets=()
   local _benchTargetRegex=()
@@ -660,10 +669,8 @@ function processCommandList() {
   fi
 
   local _runCommand=('stack' 'run')
-  local _runArgs=()
-  while IFS='' read -r _line; do
-    _runArgs+=("${_line}")
-  done < <(jq -r '.runArgs[]' <<< "${_opts}")
+  local _runArgs=''
+  _runArgs=$(jq -r '.runArgs | if . == [] then empty else join (" ") | @sh end' <<< "${_opts}")
   local _runTarget=''
   local _runTargetRegex=()
   while IFS='' read -r _line; do
@@ -682,7 +689,7 @@ function processCommandList() {
         _finalCommand+=("${_runCommand[@]}" "${_runTarget}")
       fi
 
-      if [ "${#_runArgs[@]}" -gt 0 ]; then
+      if [ -n "${_runArgs}" ]; then
         _finalCommand+=('--' "${_runArgs[@]}")
       fi
     done < <( \
@@ -691,13 +698,10 @@ function processCommandList() {
   fi
 
   local _ghciCommand=('stack' 'ghci')
-  local _ghciArgs=()
-  while IFS='' read -r _line; do
-    _ghciArgs+=("${_line}")
-  done < <(jq -r '.ghciArgs[]' <<< "${_opts}")
-
-  if [ "${#_ghciArgs[@]}" -gt 0 ]; then
-    _ghciCommand+=('--ghci-options' "'${_ghciArgs[@]}'")
+  local _ghciArgs=''
+  _ghciArgs=$(jq -r '.ghciArgs | if . == [] then empty else join (" ") | @sh end' <<< "${_opts}")
+  if [ -n "${_ghciArgs}" ]; then
+    _ghciCommand+=('--ghci-options' "${_ghciArgs}")
   fi
   local _ghciTargets=()
   local _ghciTargetRegex=()
@@ -728,11 +732,9 @@ function processCommandList() {
   local _arbitraryCommand=''
   while IFS='' read -r _line; do
     _arbitraryCommand="${_line}"
-
     if [ "${#_finalCommand[@]}" -gt 0 ]; then
       _finalCommand+=('&&')
     fi
-
     _finalCommand+=("${_arbitraryCommand}")
   done < <(jq -r '.arbitraryCommand[]' <<< "${_opts}")
 
@@ -764,9 +766,12 @@ function main() {
   local _opts
   _opts="$(parseArgs "${_jq}" "$@")"
 
-  shouldShowDetailedUsage "${_jq}" "${_opts}" && showDetailedUsage
-  shouldShowUsage "${_jq}" "${_opts}" && showUsage
-  shouldPrintVersion "${_jq}" "${_opts}" && printVersion
+  shouldShowDetailedUsage "${_jq}" "${_opts}" \
+    && showDetailedUsage
+  shouldShowUsage "${_jq}" "${_opts}" \
+    && showUsage
+  shouldPrintVersion "${_jq}" "${_opts}" \
+    && printVersion
 
   local _configFile
   _configFile="$(findConfigFile "${_jq}")"
@@ -779,13 +784,13 @@ function main() {
   shouldRegenProjectCache "${_jq}" "${_opts}" "${_cacheDir}" \
     && regenProjectCache "${_jq}" "${_cacheDir}"
 
-  shouldLoadAlias && loadAlias # TODO: Functions aren't implemented yet!
+  loadAlias "${_jq}" "${_opts}"
   shouldSaveAlias && saveAlias # TODO: Functions aren't implemented yet!
 
   processCommandList "${_jq}" "${_opts}" "${_cacheDir}"
 
   #jq < "$(findConfigFile "${_jq}")"
-  #jq <<< "${_opts}"
+  jq <<< "${_opts}"
 }
 
 main "$@"
