@@ -138,7 +138,7 @@ function parseArgs() {
   local _benchArgs=''
   local _loadAlias=''
   local _saveAlias=''
-  local _envVarsToRegister=()
+  local _envVars=()
   local _buildWithPedanticFlag='true'
   local _arbitraryCommand=''
   local _regenProjectCache='false'
@@ -179,7 +179,7 @@ function parseArgs() {
       s)
         _saveAlias="${OPTARG}";;
       e)
-        _envVarsToRegister+=("${OPTARG}");;
+        _envVars+=("${OPTARG}");;
       W)
         _buildWithPedanticFlag='false';;
       x)
@@ -221,10 +221,10 @@ function parseArgs() {
     _benchArgs=''
   fi
 
-  local _envVarsToRegisterJSON='[]'
-  if [ "${#_envVarsToRegister[@]}" -gt 0 ]; then
-    _envVarsToRegisterJSON=$( \
-      printf '%s\n' "${_envVarsToRegister[@]}" | "$(findJqOrDie)" -nR \
+  local _envVarsJSON='[]'
+  if [ "${#_envVars[@]}" -gt 0 ]; then
+    _envVarsJSON=$( \
+      printf '%s\n' "${_envVars[@]}" | "$(findJqOrDie)" -nR \
         '[ inputs
          | split("=")
          | { key: .[0]
@@ -263,7 +263,7 @@ function parseArgs() {
     --arg benchArgs "${_benchArgs}" \
     --arg loadAlias "${_loadAlias}" \
     --arg saveAlias "${_saveAlias}" \
-    --argjson envVarsToRegister "${_envVarsToRegisterJSON}" \
+    --argjson envVars "${_envVarsJSON}" \
     --argjson buildWithPedanticFlag "${_buildWithPedanticFlag}" \
     --arg arbitraryCommand "${_arbitraryCommand}" \
     --argjson regenProjectCache "${_regenProjectCache}" \
@@ -288,7 +288,7 @@ function parseArgs() {
       | .benchArgs |= ($benchArgs | emptyArrayIfEmptyString)
       | .loadAlias |= ($loadAlias | nullIfEmptyString)
       | .saveAlias |= ($saveAlias | nullIfEmptyString)
-      | .envVarsToRegister |= $envVarsToRegister
+      | .envVars |= $envVars
       | .buildWithPedanticFlag |= $buildWithPedanticFlag
       | .arbitraryCommand |= ($arbitraryCommand | emptyArrayIfEmptyString)
       | .regenProjectCache |= $regenProjectCache
@@ -449,17 +449,6 @@ function regenProjectCache() {
     > "${_cacheDir}/ghci-targets"
 }
 
-function shouldSaveAlias() {
-  # TODO: Implement me!
-  return 1
-}
-
-function saveAlias() {
-  # TODO: Implement me!
-  echo "saving alias!"
-  return 0
-}
-
 function shouldLoadAlias() {
   # TODO: Implement me!
   return 1
@@ -471,13 +460,14 @@ function loadAlias() {
   return 0
 }
 
-function shouldUseEnvVars() {
+function shouldSaveAlias() {
   # TODO: Implement me!
   return 1
 }
 
-function useEnvVars() {
+function saveAlias() {
   # TODO: Implement me!
+  echo "saving alias!"
   return 0
 }
 
@@ -746,6 +736,14 @@ function processCommandList() {
     _finalCommand+=("${_arbitraryCommand}")
   done < <(jq -r '.arbitraryCommand[]' <<< "${_opts}")
 
+  local _envVars=()
+  while IFS='' read -r _line; do
+    _envVars+=("${_line}")
+  done < <(jq -r '.envVars[] | "export \(.key)=\(.value | @sh);"' <<< "${_opts}")
+  if [ "${#_envVars[@]}" -gt 0 ]; then
+    _finalCommand=('(' "${_envVars[@]}" "${_finalCommand[@]}" ')')
+  fi
+
   if "${_jq}" -e '.execute' > /dev/null <<< "${_opts}"; then
     eval "${_finalCommand[*]}"
   else
@@ -783,7 +781,6 @@ function main() {
 
   shouldLoadAlias && loadAlias # TODO: Functions aren't implemented yet!
   shouldSaveAlias && saveAlias # TODO: Functions aren't implemented yet!
-  shouldUseEnvVars && useEnvVars # TODO: Functions aren't implemented yet!
 
   processCommandList "${_jq}" "${_opts}" "${_cacheDir}"
 
