@@ -123,7 +123,7 @@ function parseArgs() {
   local OPTIND
   local _opt
 
-  local _behavior='execute'
+  local _execute='true'
   local _fullBuildTargetRegex=''
   local _buildTargetRegex=''
   local _testTargetRegex=''
@@ -134,8 +134,8 @@ function parseArgs() {
   local _ghciArgs=''
   local _haddockTargetRegex=''
   local _haddockArgs=''
-  local _benchmarkTargetRegex=''
-  local _benchmarkArgs=''
+  local _benchTargetRegex=''
+  local _benchArgs=''
   local _loadAlias=''
   local _saveAlias=''
   local _envVarsToRegister=()
@@ -143,11 +143,13 @@ function parseArgs() {
   local _arbitraryCommand=''
   local _regenProjectCache='false'
   local _printVersion='false'
+  local _showUsage='false'
+  local _showDetailedUsage='false'
 
   while getopts pb:B:t:T:r:R:g:G:k:K:m:M:l:s:e:Wx:CVhH _opt; do
     case "${_opt}" in
       p)
-        _behavior='print';;
+        _execute='false';;
       b)
         _fullBuildTargetRegex="${OPTARG}";;
       B)
@@ -169,9 +171,9 @@ function parseArgs() {
       K)
         _haddockArgs="${OPTARG}";;
       m)
-        _benchmarkTargetRegex="${OPTARG}";;
+        _benchTargetRegex="${OPTARG}";;
       M)
-        _benchmarkArgs="${OPTARG}";;
+        _benchArgs="${OPTARG}";;
       l)
         _loadAlias="${OPTARG}";;
       s)
@@ -187,13 +189,9 @@ function parseArgs() {
       V)
         _printVersion='true';;
       h)
-        usage
-        exit 0
-        ;;
+        _showUsage='true';;
       H)
-        detailedUsage
-        exit 0
-        ;;
+        _showDetailedUsage='true';;
       \?)
         usage >&2
         exit 1
@@ -219,8 +217,8 @@ function parseArgs() {
     _haddockArgs=''
   fi
 
-  if [ -z "${_benchmarkTargetRegex}" ] && [ -n "${_benchmarkArgs}" ]; then
-    _benchmarkArgs=''
+  if [ -z "${_benchTargetRegex}" ] && [ -n "${_benchArgs}" ]; then
+    _benchArgs=''
   fi
 
   local _envVarsToRegisterJSON='[]'
@@ -250,7 +248,7 @@ function parseArgs() {
   fi
 
   "${_jq}" -nS \
-    --arg behavior "${_behavior}"  \
+    --argjson execute "${_execute}"  \
     --arg fullBuildTargetRegex "${_fullBuildTargetRegex}" \
     --arg buildTargetRegex "${_buildTargetRegex}" \
     --arg testTargetRegex "${_testTargetRegex}" \
@@ -261,8 +259,8 @@ function parseArgs() {
     --arg ghciArgs "${_ghciArgs}" \
     --arg haddockTargetRegex "${_haddockTargetRegex}" \
     --arg haddockArgs "${_haddockArgs}" \
-    --arg benchmarkTargetRegex "${_benchmarkTargetRegex}" \
-    --arg benchmarkArgs "${_benchmarkArgs}" \
+    --arg benchTargetRegex "${_benchTargetRegex}" \
+    --arg benchArgs "${_benchArgs}" \
     --arg loadAlias "${_loadAlias}" \
     --arg saveAlias "${_saveAlias}" \
     --argjson envVarsToRegister "${_envVarsToRegisterJSON}" \
@@ -270,10 +268,12 @@ function parseArgs() {
     --arg arbitraryCommand "${_arbitraryCommand}" \
     --argjson regenProjectCache "${_regenProjectCache}" \
     --argjson printVersion "${_printVersion}" \
+    --argjson showUsage "${_showUsage}" \
+    --argjson showDetailedUsage "${_showDetailedUsage}" \
     --argjson stackArgs "${_stackArgsJSON}" '
       def nullIfEmptyString: if . == "" then null else . end;
       def emptyArrayIfEmptyString: if . == "" then [] else [.] end;
-        .behavior |= $behavior
+        .execute |= $execute
       | .fullBuildTargetRegex |= ($fullBuildTargetRegex | emptyArrayIfEmptyString)
       | .buildTargetRegex |= ($buildTargetRegex | emptyArrayIfEmptyString)
       | .testTargetRegex |= ($testTargetRegex | emptyArrayIfEmptyString)
@@ -284,8 +284,8 @@ function parseArgs() {
       | .ghciArgs |= ($ghciArgs | emptyArrayIfEmptyString)
       | .haddockTargetRegex |= ($haddockTargetRegex | emptyArrayIfEmptyString)
       | .haddockArgs |= ($haddockArgs | emptyArrayIfEmptyString)
-      | .benchmarkTargetRegex |= ($benchmarkTargetRegex | emptyArrayIfEmptyString)
-      | .benchmarkArgs |= ($benchmarkArgs | emptyArrayIfEmptyString)
+      | .benchTargetRegex |= ($benchTargetRegex | emptyArrayIfEmptyString)
+      | .benchArgs |= ($benchArgs | emptyArrayIfEmptyString)
       | .loadAlias |= ($loadAlias | nullIfEmptyString)
       | .saveAlias |= ($saveAlias | nullIfEmptyString)
       | .envVarsToRegister |= $envVarsToRegister
@@ -293,13 +293,41 @@ function parseArgs() {
       | .arbitraryCommand |= ($arbitraryCommand | emptyArrayIfEmptyString)
       | .regenProjectCache |= $regenProjectCache
       | .printVersion |= $printVersion
+      | .showUsage |= $showUsage
+      | .showDetailedUsage |= $showDetailedUsage
       | .stackArgs |= $stackArgs
       '
 }
 
+function shouldShowUsage() {
+  local _jq="$1"
+  local _opts="$2"
+
+  "${_jq}" -e '.showUsage' > /dev/null <<< "${_opts}"
+}
+
+function showUsage() {
+  usage
+  exit 0
+}
+
+function shouldShowDetailedUsage() {
+  local _jq="$1"
+  local _opts="$2"
+
+  "${_jq}" -e '.showDetailedUsage' > /dev/null <<< "${_opts}"
+}
+
+function showDetailedUsage() {
+  detailedUsage
+  exit 0
+}
+
 function shouldPrintVersion() {
-  local _opts="$1"
-  jq -e '.printVersion' > /dev/null <<< "${_opts}"
+  local _jq="$1"
+  local _opts="$2"
+
+  "${_jq}" -e '.printVersion' > /dev/null <<< "${_opts}"
 }
 
 function printVersion() {
@@ -341,50 +369,388 @@ function addProjectToConfigFile() {
   local _configFile="$2"
   local _projRoot="$3"
 
+  local _cacheDirName=''
+
   local _tempFile
   _tempFile="$(mktemp)"
   cp "${_configFile}" "${_tempFile}"
 
   if ! "${_jq}" -e --arg projKey "${_projRoot}" '.projects | has($projKey)' \
     > /dev/null < "${_tempFile}"; then
-    "${_jq}" -S --arg projKey "${_projRoot}" '.projects += {($projKey): {}}' \
-      > "${_configFile}" < "${_tempFile}"
+    # TODO: Needs MacOS compatibility (md5sum vs md5)
+    _cacheDirName="$(echo "${_projRoot}" | tr -d '\n' | md5sum | cut -d ' ' -f1)"
+    "${_jq}" -S --arg projKey "${_projRoot}" --arg cacheDirName "${_cacheDirName}" '
+      .projects += {
+        ($projKey): {
+          "aliases": {},
+          "cacheDirName": $cacheDirName
+        }
+      }' > "${_configFile}" < "${_tempFile}"
   fi
 }
 
-shouldRegenerateProjectCache() {
-  return 1
+function findCacheDir() {
+  local _jq="$1"
+  local _configFile="$2"
+  local _projRoot="$3"
+
+  local _cacheDirName
+  _cacheDirName=$(
+    "${_jq}" -re --arg projRoot "${_projRoot}" \
+      '.projects[$projRoot].cacheDirName' \
+      < "${_configFile}" \
+  )
+
+  local _cacheDir
+  _cacheDir="$(dirname "${_configFile}")/cache/${_cacheDirName}"
+
+  mkdir -p "${_cacheDir}"
+  echo "${_cacheDir}"
 }
 
-function initProjectCache() {
-  return 0
+shouldRegenProjectCache() {
+  local _jq="$1"
+  local _opts="$2"
+  local _cacheDir="$3"
+
+  if [ -z "$(ls -A "${_cacheDir}")" ]; then
+    true
+  else
+    "${_jq}" -e '.regenProjectCache' > /dev/null <<< "${_opts}"
+  fi
 }
 
-function regenerateProjectCache() {
-  echo "updating project cache!"
-  return 0
+function regenProjectCache() {
+  local _jq="$1"
+  local _cacheDir="$2"
+
+  echo "REGENERATING PROJECT CACHE"
+  stack ide packages --stdout \
+    | sort \
+    > "${_cacheDir}/build-targets"
+
+  stack ide targets --stdout \
+    | awk -F ':' '($2 == "test"){print $1}' \
+    | sort -u \
+    > "${_cacheDir}/test-targets"
+
+  stack ide targets --stdout \
+    | awk -F ':' '($2 == "bench"){print $1}' \
+    | sort -u \
+    > "${_cacheDir}/bench-targets"
+
+  stack ide targets --stdout \
+    | awk -F ':' '($2 == "exe"){print $3}' \
+    | sort \
+    > "${_cacheDir}/run-targets"
+
+  stack ide targets --stdout \
+    | sort \
+    > "${_cacheDir}/ghci-targets"
 }
 
 function shouldSaveAlias() {
+  # TODO: Implement me!
   return 1
 }
 
 function saveAlias() {
-  echo "adding alias!"
+  # TODO: Implement me!
+  echo "saving alias!"
   return 0
 }
 
 function shouldLoadAlias() {
+  # TODO: Implement me!
   return 1
 }
 
 function loadAlias() {
+  # TODO: Implement me!
   echo "loading alias!"
   return 0
 }
 
-function processCommandList() {
+function shouldUseEnvVars() {
+  # TODO: Implement me!
+  return 1
+}
+
+function useEnvVars() {
+  # TODO: Implement me!
   return 0
+}
+
+function processCommandList() {
+  local _jq="$1"
+  local _opts="$2"
+  local _cacheDir="$3"
+
+  local _finalCommand=()
+  local _line
+
+  local _buildWithPedanticFlag=''
+  _buildWithPedanticFlag=$(
+    "${_jq}" '.buildWithPedanticFlag // empty' <<< "${_opts}"
+  )
+
+  local _stackArgs=()
+  while IFS='' read -r _line; do
+    _stackArgs+=("${_line}")
+  done < <(jq -r '.stackArgs[]' <<< "${_opts}")
+
+  local _buildCommand=('stack' 'build')
+
+  if [ -n "${_buildWithPedanticFlag}" ]; then
+    _buildCommand+=('--pedantic')
+  fi
+
+  local _buildTargets=()
+  local _buildTargetRegex=()
+  while IFS='' read -r _line; do
+    _buildTargetRegex+=("${_line}")
+  done < <(jq -r '.buildTargetRegex[]' <<< "${_opts}")
+  if [ "${#_buildTargetRegex[@]}" -gt 0 ]; then
+    while IFS='' read -r _line; do
+      _buildTargets+=("${_line}")
+    done < <( \
+      grep -Ef <(printf '%s\n' "${_buildTargetRegex[@]}") "${_cacheDir}/build-targets"
+    )
+
+    if [ "${#_buildTargets[@]}" -gt 0 ]; then
+      if [ "${#_stackArgs[@]}" -gt 0 ]; then
+        _finalCommand+=("${_buildCommand[@]}" "${_stackArgs[@]}" "${_buildTargets[@]}")
+      else
+        _finalCommand+=("${_buildCommand[@]}" "${_buildTargets[@]}")
+      fi
+    fi
+  fi
+  local _fullBuildCommand=(
+    'stack' 'build' '--test' '--no-run-tests' '--bench' '--no-run-benchmarks'
+  )
+  if [ -n "${_buildWithPedanticFlag}" ]; then
+    _fullBuildCommand+=('--pedantic')
+  fi
+  local _fullBuildTargets=()
+  local _fullBuildTargetRegex=()
+  while IFS='' read -r _line; do
+    _fullBuildTargetRegex+=("${_line}")
+  done < <(jq -r '.fullBuildTargetRegex[]' <<< "${_opts}")
+
+  if [ "${#_fullBuildTargetRegex[@]}" -gt 0 ]; then
+    while IFS='' read -r _line; do
+      _fullBuildTargets+=("${_line}")
+    done < <( \
+      grep -Ef <(printf '%s\n' "${_fullBuildTargetRegex[@]}") "${_cacheDir}/build-targets"
+    )
+
+    if [ "${#_fullBuildTargets[@]}" -gt 0 ]; then
+      if [ "${#_finalCommand[@]}" -gt 0 ]; then
+        _finalCommand+=('&&')
+      fi
+
+      if [ "${#_stackArgs[@]}" -gt 0 ]; then
+        _finalCommand+=("${_fullBuildCommand[@]}" "${_stackArgs[@]}" "${_fullBuildTargets[@]}")
+      else
+        _finalCommand+=("${_fullBuildCommand[@]}" "${_fullBuildTargets[@]}")
+      fi
+    fi
+  fi
+
+  local _testCommand=('stack' 'test')
+  if [ -n "${_buildWithPedanticFlag}" ]; then
+    _testCommand+=('--pedantic')
+  fi
+  local _testArgs=()
+  while IFS='' read -r _line; do
+    _testArgs+=("${_line}")
+  done < <(jq -r '.testArgs[]' <<< "${_opts}")
+  if [ "${#_testArgs[@]}" -gt 0 ]; then
+    _testCommand+=('--test-arguments' "'${_testArgs[@]}'")
+  fi
+  local _testTargets=()
+  local _testTargetRegex=()
+  while IFS='' read -r _line; do
+    _testTargetRegex+=("${_line}")
+  done < <(jq -r '.testTargetRegex[]' <<< "${_opts}")
+
+  if [ "${#_testTargetRegex[@]}" -gt 0 ]; then
+    while IFS='' read -r _line; do
+      _testTargets+=("${_line}")
+    done < <( \
+      grep -Ef <(printf '%s\n' "${_testTargetRegex[@]}") "${_cacheDir}/test-targets"
+    )
+
+    if [ "${#_testTargets[@]}" -gt 0 ]; then
+      if [ "${#_finalCommand[@]}" -gt 0 ]; then
+        _finalCommand+=('&&')
+      fi
+
+      if [ "${#_stackArgs[@]}" -gt 0 ]; then
+        _finalCommand+=("${_testCommand[@]}" "${_stackArgs[@]}" "${_testTargets[@]}")
+      else
+        _finalCommand+=("${_testCommand[@]}" "${_testTargets[@]}")
+      fi
+    fi
+  fi
+
+  local _haddockCommand=('stack' 'haddock')
+  if [ -n "${_buildWithPedanticFlag}" ]; then
+    _haddockCommand+=('--pedantic')
+  fi
+  local _haddockArgs=()
+  while IFS='' read -r _line; do
+    _haddockArgs+=("${_line}")
+  done < <(jq -r '.haddockArgs[]' <<< "${_opts}")
+  if [ "${#_haddockArgs[@]}" -gt 0 ]; then
+    _haddockCommand+=('--haddock-arguments' "'${_haddockArgs[@]}'")
+  fi
+  local _haddockTargets=()
+  local _haddockTargetRegex=()
+  while IFS='' read -r _line; do
+    _haddockTargetRegex+=("${_line}")
+  done < <(jq -r '.haddockTargetRegex[]' <<< "${_opts}")
+
+  if [ "${#_haddockTargetRegex[@]}" -gt 0 ]; then
+    while IFS='' read -r _line; do
+      _haddockTargets+=("${_line}")
+    done < <( \
+      grep -Ef <(printf '%s\n' "${_haddockTargetRegex[@]}") "${_cacheDir}/build-targets"
+    )
+
+    if [ "${#_haddockTargets[@]}" -gt 0 ]; then
+      if [ "${#_finalCommand[@]}" -gt 0 ]; then
+        _finalCommand+=('&&')
+      fi
+
+      if [ "${#_stackArgs[@]}" -gt 0 ]; then
+        _finalCommand+=("${_haddockCommand[@]}" "${_stackArgs[@]}" "${_haddockTargets[@]}")
+      else
+        _finalCommand+=("${_haddockCommand[@]}" "${_haddockTargets[@]}")
+      fi
+    fi
+  fi
+
+  local _benchCommand=('stack' 'bench')
+  if [ -n "${_buildWithPedanticFlag}" ]; then
+    _benchCommand+=('--pedantic')
+  fi
+  local _benchArgs=()
+  while IFS='' read -r _line; do
+    _benchArgs+=("${_line}")
+  done < <(jq -r '.benchArgs[]' <<< "${_opts}")
+
+  if [ "${#_benchArgs[@]}" -gt 0 ]; then
+    _benchCommand+=('--bench-arguments' "'${_benchArgs[@]}'")
+  fi
+  local _benchTargets=()
+  local _benchTargetRegex=()
+  while IFS='' read -r _line; do
+    _benchTargetRegex+=("${_line}")
+  done < <(jq -r '.benchTargetRegex[]' <<< "${_opts}")
+
+  if [ "${#_benchTargetRegex[@]}" -gt 0 ]; then
+    while IFS='' read -r _line; do
+      _benchTargets+=("${_line}")
+    done < <( \
+      grep -Ef <(printf '%s\n' "${_benchTargetRegex[@]}") "${_cacheDir}/bench-targets"
+    )
+
+    if [ "${#_benchTargets[@]}" -gt 0 ]; then
+      if [ "${#_finalCommand[@]}" -gt 0 ]; then
+        _finalCommand+=('&&')
+      fi
+
+      if [ "${#_stackArgs[@]}" -gt 0 ]; then
+        _finalCommand+=("${_benchCommand[@]}" "${_stackArgs[@]}" "${_benchTargets[@]}")
+      else
+        _finalCommand+=("${_benchCommand[@]}" "${_benchTargets[@]}")
+      fi
+    fi
+  fi
+
+  local _runCommand=('stack' 'run')
+  local _runArgs=()
+  while IFS='' read -r _line; do
+    _runArgs+=("${_line}")
+  done < <(jq -r '.runArgs[]' <<< "${_opts}")
+  local _runTarget=''
+  local _runTargetRegex=()
+  while IFS='' read -r _line; do
+    _runTargetRegex+=("${_line}")
+  done < <(jq -r '.runTargetRegex[]' <<< "${_opts}")
+  if [ "${#_runTargetRegex[@]}" -gt 0 ]; then
+    while IFS='' read -r _line; do
+      _runTarget="${_line}"
+      if [ "${#_finalCommand[@]}" -gt 0 ]; then
+        _finalCommand+=('&&')
+      fi
+
+      if [ "${#_stackArgs[@]}" -gt 0 ]; then
+        _finalCommand+=("${_runCommand[@]}" "${_stackArgs[@]}" "${_runTarget}")
+      else
+        _finalCommand+=("${_runCommand[@]}" "${_runTarget}")
+      fi
+
+      if [ "${#_runArgs[@]}" -gt 0 ]; then
+        _finalCommand+=('--' "${_runArgs[@]}")
+      fi
+    done < <( \
+      grep -Ef <(printf '%s\n' "${_runTargetRegex[@]}") "${_cacheDir}/run-targets"
+    )
+  fi
+
+  local _ghciCommand=('stack' 'ghci')
+  local _ghciArgs=()
+  while IFS='' read -r _line; do
+    _ghciArgs+=("${_line}")
+  done < <(jq -r '.ghciArgs[]' <<< "${_opts}")
+
+  if [ "${#_ghciArgs[@]}" -gt 0 ]; then
+    _ghciCommand+=('--ghci-options' "'${_ghciArgs[@]}'")
+  fi
+  local _ghciTargets=()
+  local _ghciTargetRegex=()
+  while IFS='' read -r _line; do
+    _ghciTargetRegex+=("${_line}")
+  done < <(jq -r '.ghciTargetRegex[]' <<< "${_opts}")
+
+  if [ "${#_ghciTargetRegex[@]}" -gt 0 ]; then
+    while IFS='' read -r _line; do
+      _ghciTargets+=("${_line}")
+    done < <( \
+      grep -Ef <(printf '%s\n' "${_ghciTargetRegex[@]}") "${_cacheDir}/ghci-targets"
+    )
+
+    if [ "${#_ghciTargets[@]}" -gt 0 ]; then
+      if [ "${#_finalCommand[@]}" -gt 0 ]; then
+        _finalCommand+=('&&')
+      fi
+
+      if [ "${#_stackArgs[@]}" -gt 0 ]; then
+        _finalCommand+=("${_ghciCommand[@]}" "${_stackArgs[@]}" "${_ghciTargets[@]}")
+      else
+        _finalCommand+=("${_ghciCommand[@]}" "${_ghciTargets[@]}")
+      fi
+    fi
+  fi
+
+  local _arbitraryCommand=''
+  while IFS='' read -r _line; do
+    _arbitraryCommand="${_line}"
+
+    if [ "${#_finalCommand[@]}" -gt 0 ]; then
+      _finalCommand+=('&&')
+    fi
+
+    _finalCommand+=("${_arbitraryCommand}")
+  done < <(jq -r '.arbitraryCommand[]' <<< "${_opts}")
+
+  if "${_jq}" -e '.execute' > /dev/null <<< "${_opts}"; then
+    eval "${_finalCommand[*]}"
+  else
+    echo "${_finalCommand[*]}"
+  fi
 }
 
 function main() {
@@ -400,22 +766,29 @@ function main() {
   local _opts
   _opts="$(parseArgs "${_jq}" "$@")"
 
-  shouldPrintVersion "${_opts}" && printVersion
+  shouldShowDetailedUsage "${_jq}" "${_opts}" && showDetailedUsage
+  shouldShowUsage "${_jq}" "${_opts}" && showUsage
+  shouldPrintVersion "${_jq}" "${_opts}" && printVersion
 
   local _configFile
   _configFile="$(findConfigFile "${_jq}")"
 
   addProjectToConfigFile "${_jq}" "${_configFile}" "${_projRoot}"
 
-  initProjectCache
-  shouldRegenerateProjectCache && regenerateProjectCache
+  local _cacheDir
+  _cacheDir=$(findCacheDir "${_jq}" "${_configFile}" "${_projRoot}")
 
-  shouldLoadAlias && loadAlias
-  shouldSaveAlias && saveAlias
+  shouldRegenProjectCache "${_jq}" "${_opts}" "${_cacheDir}" \
+    && regenProjectCache "${_jq}" "${_cacheDir}"
 
-  processCommandList
+  shouldLoadAlias && loadAlias # TODO: Functions aren't implemented yet!
+  shouldSaveAlias && saveAlias # TODO: Functions aren't implemented yet!
+  shouldUseEnvVars && useEnvVars # TODO: Functions aren't implemented yet!
 
-  jq < "$(findConfigFile "${_jq}")"
+  processCommandList "${_jq}" "${_opts}" "${_cacheDir}"
+
+  #jq < "$(findConfigFile "${_jq}")"
+  #jq <<< "${_opts}"
 }
 
 main "$@"
