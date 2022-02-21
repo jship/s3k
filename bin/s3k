@@ -4,6 +4,8 @@
 # Example of using subshell so that env vars only have to be set once.
 # (export TEST=42; bin/test.sh && bin/test.sh)
 
+# TODO: Trap for cleanup
+
 set -o errexit
 set -o pipefail
 [[ "${DEBUG}" == 'true' ]] && set -o xtrace
@@ -224,7 +226,7 @@ function parseArgs() {
   local _envVarsJSON='[]'
   if [ "${#_envVars[@]}" -gt 0 ]; then
     _envVarsJSON=$( \
-      printf '%s\n' "${_envVars[@]}" | "$(findJqOrDie)" -nR \
+      printf '%s\n' "${_envVars[@]}" | jq -nR \
         '[ inputs
          | split("=")
          | { key: .[0]
@@ -451,40 +453,128 @@ function regenProjectCache() {
 
 function loadAlias() {
   local _jq="$1"
-  local _opts="$2"
+  local _configFile="$2"
+  local _projRoot="$3"
+  local _opts="$4"
 
-  "${_jq}" \
-    '.loadAlias //
-       {
-         "fullBuildTargetRegex": [],
-         "buildTargetRegex": [],
-         "testTargetRegex": [],
-         "testArgs": [],
-         "runTargetRegex": [],
-         "runArgs": [],
-         "ghciTargetRegex": [],
-         "ghciArgs": [],
-         "haddockTargetRegex": [],
-         "haddockArgs": [],
-         "benchTargetRegex": [],
-         "benchArgs": [],
-         "envVars": [],
-         "buildWithPedanticFlag": false,
-         "arbitraryCommand": [],
-         "stackArgs": []
-       }
-    ' <<< "${_opts}"
+  local _aliasName=''
+  _aliasName="$("${_jq}" -r '.loadAlias // empty' <<< "${_opts}")"
+
+  local _alias=''
+  if [ -z "${_aliasName}" ]; then
+    _alias=$(
+      "${_jq}" -nS \
+        '{
+           fullBuildTargetRegex: [],
+           buildTargetRegex: [],
+           testTargetRegex: [],
+           testArgs: [],
+           runTargetRegex: [],
+           runArgs: [],
+           ghciTargetRegex: [],
+           ghciArgs: [],
+           haddockTargetRegex: [],
+           haddockArgs: [],
+           benchTargetRegex: [],
+           benchArgs: [],
+           envVars: [],
+           arbitraryCommand: [],
+           stackArgs: []
+         }'
+    )
+  else
+    _alias=$(
+      "${_jq}" -S \
+        --arg projRoot "${_projRoot}" \
+        --arg aliasName "${_aliasName}" '
+          .projects[$projRoot].aliases[$aliasName] // empty
+        ' < "${_configFile}" \
+    )
+
+    if [ -z "${_alias}" ]; then
+      echo "s3k: Alias \"${_aliasName}\" does not exist" >&2
+      exit 1
+    fi
+  fi
+
+  echo "${_alias}"
 }
 
-function shouldSaveAlias() {
-  # TODO: Implement me!
-  return 1
+function mergeAliasWithOpts() {
+  local _jq="$1"
+  local _opts="$2"
+  local _alias="$3"
+
+  "${_jq}" -n '
+    {
+      execute:$ARGS.positional[0].execute,
+      fullBuildTargetRegex: ($ARGS.positional[0].fullBuildTargetRegex + $ARGS.positional[1].fullBuildTargetRegex) | unique,
+      buildTargetRegex: ($ARGS.positional[0].buildTargetRegex + $ARGS.positional[1].buildTargetRegex) | unique,
+      testTargetRegex: ($ARGS.positional[0].testTargetRegex + $ARGS.positional[1].testTargetRegex) | unique,
+      testArgs: ($ARGS.positional[0].testArgs + $ARGS.positional[1].testArgs),
+      runTargetRegex: ($ARGS.positional[0].runTargetRegex + $ARGS.positional[1].runTargetRegex) | unique,
+      runArgs: ($ARGS.positional[0].runArgs + $ARGS.positional[1].runArgs),
+      ghciTargetRegex: ($ARGS.positional[0].ghciTargetRegex + $ARGS.positional[1].ghciTargetRegex) | unique,
+      ghciArgs: ($ARGS.positional[0].ghciArgs + $ARGS.positional[1].ghciArgs),
+      haddockTargetRegex: ($ARGS.positional[0].haddockTargetRegex + $ARGS.positional[1].haddockTargetRegex) | unique,
+      haddockArgs: ($ARGS.positional[0].haddockArgs + $ARGS.positional[1].haddockArgs),
+      benchTargetRegex: ($ARGS.positional[0].benchTargetRegex + $ARGS.positional[1].benchTargetRegex) | unique,
+      benchArgs: ($ARGS.positional[0].benchArgs + $ARGS.positional[1].benchArgs),
+      loadAlias: $ARGS.positional[0].loadAlias,
+      saveAlias: $ARGS.positional[0].saveAlias,
+      envVars: ($ARGS.positional[0].envVars + $ARGS.positional[1].envVars) | unique,
+      buildWithPedanticFlag: $ARGS.positional[0].buildWithPedanticFlag,
+      arbitraryCommand: ($ARGS.positional[0].arbitraryCommand + $ARGS.positional[1].arbitraryCommand),
+      regenProjectCache: $ARGS.positional[0].regenProjectCache,
+      printVersion: $ARGS.positional[0].printVersion,
+      showUsage: $ARGS.positional[0].showUsage,
+      showDetailedUsage: $ARGS.positional[0].showDetailedUsage,
+      stackArgs: ($ARGS.positional[0].stackArgs + $ARGS.positional[1].stackArgs)
+    }' --jsonargs "${_opts}" "${_alias}"
 }
 
 function saveAlias() {
-  # TODO: Implement me!
-  echo "saving alias!"
-  return 0
+  local _jq="$1"
+  local _projRoot="$2"
+  local _opts="$3"
+
+  local _aliasName=''
+  _aliasName="$("${_jq}" -r '.saveAlias // empty' <<< "${_opts}")"
+
+  local _tempFile=''
+
+  local _alias=''
+  if [ -n "${_aliasName}" ]; then
+    _alias=$(
+      "${_jq}" \
+        '{
+           fullBuildTargetRegex,
+           buildTargetRegex,
+           testTargetRegex,
+           testArgs,
+           runTargetRegex,
+           runArgs,
+           ghciTargetRegex,
+           ghciArgs,
+           haddockTargetRegex,
+           haddockArgs,
+           benchTargetRegex,
+           benchArgs,
+           envVars,
+           arbitraryCommand,
+           stackArgs
+         }' <<< "${_opts}"
+    )
+
+    _tempFile="$(mktemp)"
+    cp "${_configFile}" "${_tempFile}"
+    "${_jq}" -S \
+      --arg projRoot "${_projRoot}" \
+      --arg aliasName "${_aliasName}" \
+      --argjson alias "${_alias}" '
+        .projects[$projRoot].aliases[$aliasName] |= $alias
+      ' > "${_configFile}" < "${_tempFile}"
+  fi
 }
 
 function processCommandList() {
@@ -784,13 +874,18 @@ function main() {
   shouldRegenProjectCache "${_jq}" "${_opts}" "${_cacheDir}" \
     && regenProjectCache "${_jq}" "${_cacheDir}"
 
-  loadAlias "${_jq}" "${_opts}"
-  shouldSaveAlias && saveAlias # TODO: Functions aren't implemented yet!
+  local _alias=''
+  _alias="$(loadAlias "${_jq}" "${_configFile}" "${_projRoot}" "${_opts}")"
 
-  processCommandList "${_jq}" "${_opts}" "${_cacheDir}"
+  local _augmentedOpts=''
+  _augmentedOpts="$(mergeAliasWithOpts "${_jq}" "${_opts}" "${_alias}")"
+
+  saveAlias "${_jq}" "${_projRoot}" "${_augmentedOpts}"
+
+  processCommandList "${_jq}" "${_augmentedOpts}" "${_cacheDir}"
 
   #jq < "$(findConfigFile "${_jq}")"
-  jq <<< "${_opts}"
+  #jq <<< "${_augmentedOpts}"
 }
 
 main "$@"
