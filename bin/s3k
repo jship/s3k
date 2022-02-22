@@ -380,8 +380,18 @@ function addProjectToConfigFile() {
 
   if ! "${_jq}" -e --arg projKey "${_projRoot}" '.projects | has($projKey)' \
     > /dev/null < "${_tempFile}"; then
-    # TODO: Needs MacOS compatibility (md5sum vs md5)
-    _cacheDirName="$(echo "${_projRoot}" | tr -d '\n' | md5sum | cut -d ' ' -f1)"
+
+    if command -v 'md5sum' &> /dev/null; then
+      _cacheDirName="$(echo "${_projRoot}" | tr -d '\n' | md5sum | cut -d ' ' -f1)"
+    elif command -v 'md5' &> /dev/null; then
+      # The 'cut' is probably unnecessary when using 'md5' in this way, but it
+      # doesn't hurt. ¯\_(ツ)_/¯
+      _cacheDirName="$(echo "${_projRoot}" | tr -d '\n' | md5 | cut -d ' ' -f1)"
+    else
+      echo "s3k: Could not find 'md5sum' or 'md5'" >&2
+      exit 1
+    fi
+
     "${_jq}" -S --arg projKey "${_projRoot}" --arg cacheDirName "${_cacheDirName}" '
       .projects += {
         ($projKey): {
