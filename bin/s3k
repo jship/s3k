@@ -249,6 +249,7 @@ function parseArgs() {
     )
   fi
 
+  # TODO: Clean this up
   "${_jq}" -nS \
     --argjson execute "${_execute}"  \
     --arg fullBuildTargetRegex "${_fullBuildTargetRegex}" \
@@ -426,7 +427,6 @@ function regenProjectCache() {
   local _jq="$1"
   local _cacheDir="$2"
 
-  echo "REGENERATING PROJECT CACHE"
   stack ide packages --stdout \
     | sort \
     > "${_cacheDir}/build-targets"

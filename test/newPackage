@@ -1,0 +1,330 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2016
+
+set -o errexit
+set -o pipefail
+[[ "${DEBUG}" == 'true' ]] && set -o xtrace
+
+function usage() {
+  cat <<EOF
+newPackage - Generate a new barebones stack package
+
+USAGE
+  newPackage [OPTIONS]
+
+OPTIONS
+  -n PROJ_NAME    Name of package
+  -t              Include test suite
+  -b              Include benchmark suite
+  -h              Show help
+EOF
+}
+
+function findJqOrDie() {
+  local _jq=''
+  if [ -x "${S3K_PATH_JQ}" ]; then
+    _jq="${S3K_PATH_JQ}"
+  elif command -v 'jq' &>/dev/null; then
+    _jq='jq'
+  else
+    echo "newPackage: 'jq' binary not found on runtime path or S3K_PATH_JQ" >&2
+    exit 1
+  fi
+
+  echo "${_jq}"
+}
+
+function parseArgs() {
+  local _jq="$1"
+  shift 1
+
+  local OPTARG
+  local OPTIND
+  local _opt
+
+  local _projName=''
+  local _includeTestSuite='false'
+  local _includeBenchSuite='false'
+  local _showUsage='false'
+
+  while getopts n:tbh _opt; do
+    case "${_opt}" in
+      n)
+        _projName="${OPTARG}";;
+      t)
+        _includeTestSuite="true";;
+      b)
+        _includeBenchSuite="true";;
+      h)
+        _showUsage='true';;
+      \?)
+        usage >&2
+        exit 1
+        ;;
+    esac
+  done
+
+  shift $((OPTIND - 1))
+
+  if [ -z "${_projName}" ]; then
+    echo "newPackage: -n NAME is required" >&2
+    exit 1
+  fi
+
+  "${_jq}" -nS \
+    --arg projName "${_projName}" \
+    --argjson includeTestSuite "${_includeTestSuite}" \
+    --argjson includeBenchSuite "${_includeBenchSuite}" \
+    --argjson showUsage "${_showUsage}" '{
+        projName: $projName,
+        modulePath:
+          $projName
+            | split("-")
+            | map(split("") | ([.[0] | ascii_upcase] + .[1:] + ["/"]))
+            | add
+            | (if .[-1] == "/" then .[0:-1] else .[] end)
+            | join("")
+            | (. + ".hs"),
+        testModulePath:
+          $projName
+            | split("-")
+            | map(split("") | ([.[0] | ascii_upcase] + .[1:] + ["/"]))
+            | add
+            | (if .[-1] == "/" then .[0:-1] else .[] end)
+            | join("")
+            | ("Test/" + . + "Spec.hs"),
+        benchModulePath:
+          $projName
+            | split("-")
+            | map(split("") | ([.[0] | ascii_upcase] + .[1:] + ["/"]))
+            | add
+            | (if .[-1] == "/" then .[0:-1] else .[] end)
+            | join("")
+            | ("Bench/" + . + "Benchmarks.hs"),
+        moduleName:
+          $projName
+            | split("-")
+            | map(split("") | ([.[0] | ascii_upcase] + .[1:] + ["."]))
+            | add
+            | (if .[-1] == "." then .[0:-1] else .[] end)
+            | join(""),
+        testModuleName:
+          $projName
+            | split("-")
+            | map(split("") | ([.[0] | ascii_upcase] + .[1:] + ["."]))
+            | add
+            | (if .[-1] == "." then .[0:-1] else .[] end)
+            | join("")
+            | ("Test." + . + "Spec"),
+        benchModuleName:
+          $projName
+            | split("-")
+            | map(split("") | ([.[0] | ascii_upcase] + .[1:] + ["."]))
+            | add
+            | (if .[-1] == "." then .[0:-1] else .[] end)
+            | join("")
+            | ("Bench." + . + "Benchmarks"),
+        functionName:
+          $projName
+            | split("-")
+            | map(split("") | ([.[0]] + .[1:] + ["_"]))
+            | add
+            | (if .[-1] == "_" then .[0:-1] else .[] end)
+            | join(""),
+        includeTestSuite: $includeTestSuite,
+        includeBenchSuite: $includeBenchSuite,
+        showUsage: $showUsage
+      }'
+}
+
+function shouldShowUsage() {
+  local _jq="$1"
+  local _opts="$2"
+
+  "${_jq}" -e '.showUsage' > /dev/null <<< "${_opts}"
+}
+
+function showUsage() {
+  usage
+  exit 0
+}
+
+function generatePackage() {
+  local _jq="$1"
+  local _opts="$2"
+
+  local _projName=''
+  _projName="$("${_jq}" -r '.projName' <<< "${_opts}")"
+
+  local _monorepoDir=''
+  _monorepoDir="$(git rev-parse --show-toplevel)/test/monorepo"
+
+  local _packageDir="${_monorepoDir}/${_projName}"
+
+  mkdir -p "${_packageDir}"
+
+  if [ ! -f "${_monorepoDir}/stack.yaml" ]; then
+    cat <<EOF > "${_monorepoDir}/stack.yaml"
+resolver: lts-18.26
+packages:
+- ./${_projName}
+EOF
+  elif ! grep -q "${_projName}" "${_monorepoDir}/stack.yaml"; then
+    echo "- ./${_projName}" >> "${_monorepoDir}/stack.yaml"
+  fi
+
+  cat <<EOF > "${_packageDir}/package.yaml"
+name: ${_projName}
+version: '0.0.0.0'
+copyright: 2022 (c) Jason Shipman
+author: "Jason Shipman"
+maintainer: "Jason Shipman"
+synopsis: ${_projName} synopsis
+description: ${_projName} description
+category: Data
+
+extra-source-files:
+- package.yaml
+
+ghc-options:
+  - -Wall
+  - -fwarn-tabs
+  - -Wincomplete-uni-patterns
+  - -Wredundant-constraints
+
+library:
+  dependencies:
+  - base
+  source-dirs: library
+
+EOF
+
+  mkdir -p "${_packageDir}/library"
+
+  local _modulePath=''
+  _modulePath="$("${_jq}" -r '.modulePath' <<< "${_opts}")"
+
+  local _moduleName=''
+  _moduleName="$("${_jq}" -r '.moduleName' <<< "${_opts}")"
+
+  local _functionName=''
+  _functionName="$("${_jq}" -r '.functionName' <<< "${_opts}")"
+
+  mkdir -p "$(dirname "${_packageDir}/library/${_modulePath}")"
+  cat <<EOF > "${_packageDir}/library/${_modulePath}"
+module ${_moduleName}
+  ( ${_functionName}
+  ) where
+
+${_functionName} :: Int
+${_functionName} = 42
+EOF
+
+  if "${_jq}" -e '.includeTestSuite' > /dev/null <<< "${_opts}"; then
+    mkdir -p "${_packageDir}/test-suite"
+
+    local _testModulePath=''
+    _testModulePath="$("${_jq}" -r '.testModulePath' <<< "${_opts}")"
+
+    local _testModuleName=''
+    _testModuleName="$("${_jq}" -r '.testModuleName' <<< "${_opts}")"
+
+    local _functionName=''
+    _functionName="$("${_jq}" -r '.functionName' <<< "${_opts}")"
+
+    mkdir -p "$(dirname "${_packageDir}/test-suite/${_testModulePath}")"
+    cat <<EOF > "${_packageDir}/test-suite/${_testModulePath}"
+{-# LANGUAGE BlockArguments #-}
+module ${_testModuleName}
+  ( spec
+  ) where
+
+import ${_moduleName} (${_functionName})
+import Test.Hspec (Spec, describe, it, shouldBe)
+
+spec :: Spec
+spec = do
+  describe "${_moduleName}" do
+    it "works" do
+      ${_functionName} \`shouldBe\` 42
+EOF
+
+    cat <<EOF > "${_packageDir}/test-suite/Driver.hs"
+{-# OPTIONS_GHC -F -pgmF hspec-discover #-}
+EOF
+
+    cat <<EOF >> "${_packageDir}/package.yaml"
+tests:
+  ${_projName}-test-suite:
+    source-dirs: test-suite
+    main: Driver.hs
+    build-tools:
+    - hspec-discover
+    dependencies:
+    - base
+    - hspec
+    - ${_projName}
+
+EOF
+  fi
+
+  if "${_jq}" -e '.includeBenchSuite' > /dev/null <<< "${_opts}"; then
+    mkdir -p "${_packageDir}/bench-suite"
+
+    local _benchModulePath=''
+    _benchModulePath="$("${_jq}" -r '.benchModulePath' <<< "${_opts}")"
+
+    local _benchModuleName=''
+    _benchModuleName="$("${_jq}" -r '.benchModuleName' <<< "${_opts}")"
+
+    local _functionName=''
+    _functionName="$("${_jq}" -r '.functionName' <<< "${_opts}")"
+
+    mkdir -p "$(dirname "${_packageDir}/bench-suite/${_benchModulePath}")"
+    cat <<EOF > "${_packageDir}/bench-suite/${_benchModulePath}"
+{-# LANGUAGE BlockArguments #-}
+module ${_benchModuleName}
+  ( main
+  ) where
+
+import ${_moduleName} (${_functionName})
+import Criterion.Main (bench, bgroup, defaultMain, whnf)
+
+main :: IO ()
+main =
+  defaultMain
+    [ bgroup "${_functionName}"
+        [ bench "stub" $ whnf id ${_functionName}
+        ]
+    ]
+EOF
+
+    cat <<EOF >> "${_packageDir}/package.yaml"
+benchmarks:
+  ${_projName}-bench-suite:
+    source-dirs: bench-suite
+    main: ${_benchModuleName}
+    dependencies:
+    - base
+    - criterion
+    - ${_projName}
+
+EOF
+  fi
+}
+
+function main() {
+  local _jq
+  _jq="$(findJqOrDie)"
+
+  local _opts
+  _opts="$(parseArgs "${_jq}" "$@")"
+
+  shouldShowUsage "${_jq}" "${_opts}" \
+    && showUsage
+
+  jq <<< "${_opts}"
+  generatePackage "${_jq}" "${_opts}"
+}
+
+main "$@"

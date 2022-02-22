@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+
+set -o errexit
+set -o pipefail
+[[ "${DEBUG}" == 'true' ]] && set -o xtrace
+
+declare -g tempDir=''
+tempDir="$(mktemp -d)"
+function removeTempDir() {
+  if [ -d "${tempDir}" ]; then
+    rm -rf "${tempDir}"
+  fi
+}
+trap removeTempDir EXIT
+
+function oneTimeSetUp() {
+  declare -g s3k=''
+  s3k="$(git rev-parse --show-toplevel)/bin/s3k"
+  if [ ! -f "${s3k}" ]; then
+    fail "No file exists at \"${s3k}\" path" >&2
+  fi
+}
+
+function testEquality() {
+  echo "s3k: ${s3k}"
+  ${_ASSERT_EQUALS_} '"foo"' 1 1
+}
+
+function main() {
+  # We download 'shunit2' to a temporary directory that is deleted on exit
+  # rather than check copy 'shunit2' into the 's3k' repo.
+  curl -sLo "${tempDir}/shunit2-2.1.8.tar.gz" \
+    https://github.com/kward/shunit2/archive/refs/tags/v2.1.8.tar.gz
+  tar xf "${tempDir}/shunit2-2.1.8.tar.gz" \
+    -C "${tempDir}" --strip-components 1 shunit2-2.1.8/shunit2
+  source "${tempDir}/shunit2"
+}
+
+main
