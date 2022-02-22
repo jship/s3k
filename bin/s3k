@@ -846,6 +846,13 @@ function processCommandList() {
     _finalCommand=('(' "${_envVars[@]}" "${_finalCommand[@]}" ')')
   fi
 
+  if [ "${#_finalCommand[@]}" -eq 0 ]; then
+    _finalCommand+=('stack')
+    if [ "${#_stackArgs[@]}" -gt 0 ]; then
+      _finalCommand+=("${_stackArgs[@]}")
+    fi
+  fi
+
   if "${_jq}" -e '.execute' > /dev/null <<< "${_opts}"; then
     eval "${_finalCommand[*]}"
   else
