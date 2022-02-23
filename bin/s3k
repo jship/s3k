@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2016
 
+# TODO: Check case when no targets are found
+
 # Example of using subshell so that env vars only have to be set once.
 # (export TEST=42; bin/test.sh && bin/test.sh)
 
