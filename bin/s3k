@@ -38,8 +38,8 @@ OPTIONS
   -m REGEX     Select benchmark target(s) via extended regex
   -M ARGS      Benchmark arguments
                  (be sure to quote ARGS, e.g. -M '--match pattern Foo')
-  -l ALIAS     Load a project-specific command via alias
-  -s ALIAS     Save the final command to a project-specific alias
+  -a ALIAS     Load a project-specific command via alias
+  -A ALIAS     Save the final command to a project-specific alias
   -e KEY=VAL   Use an environment variable in the final command
                  (this option may be specified multiple times)
   -W           Build without '--pedantic' flag
@@ -148,7 +148,7 @@ function parseArgs() {
   local _showUsage='false'
   local _showDetailedUsage='false'
 
-  while getopts pb:B:t:T:r:R:g:G:k:K:m:M:l:s:e:Wx:CVhH _opt; do
+  while getopts pb:B:t:T:r:R:g:G:k:K:m:M:a:A:e:Wx:CVhH _opt; do
     case "${_opt}" in
       p)
         _execute='false';;
@@ -176,9 +176,9 @@ function parseArgs() {
         _benchTargetRegex="${OPTARG}";;
       M)
         _benchArgs="${OPTARG}";;
-      l)
+      a)
         _loadAlias="${OPTARG}";;
-      s)
+      A)
         _saveAlias="${OPTARG}";;
       e)
         _envVars+=("${OPTARG}");;
