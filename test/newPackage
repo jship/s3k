@@ -323,7 +323,6 @@ function main() {
   shouldShowUsage "${_jq}" "${_opts}" \
     && showUsage
 
-  jq <<< "${_opts}"
   generatePackage "${_jq}" "${_opts}"
 }
 

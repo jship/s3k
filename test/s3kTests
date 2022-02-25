@@ -14,16 +14,191 @@ function removeTempDir() {
 trap removeTempDir EXIT
 
 function oneTimeSetUp() {
-  declare -g s3k=''
-  s3k="$(git rev-parse --show-toplevel)/bin/s3k"
-  if [ ! -f "${s3k}" ]; then
-    fail "No file exists at \"${s3k}\" path" >&2
+  declare -g s3kScript=''
+  s3kScript="$(git rev-parse --show-toplevel)/bin/s3k"
+  if [ ! -s "${s3kScript}" ]; then
+    fail "No file exists at \"${s3kScript}\" path" >&2
   fi
+
+  declare -g newPackageScript=''
+  newPackageScript="$(git rev-parse --show-toplevel)/test/newPackage"
+  if [ ! -s "${newPackageScript}" ]; then
+    fail "No file exists at \"${newPackageScript}\" path" >&2
+  fi
+
+  declare -g _monorepoDir=''
+  _monorepoDir="$(git rev-parse --show-toplevel)/test/monorepo"
+
+  "${newPackageScript}" -n bar-core
+  "${newPackageScript}" -n bar-api -t
+  "${newPackageScript}" -n bar-server -t -b
+  "${newPackageScript}" -n bar-client -t
+
+  "${newPackageScript}" -n foo-core
+  "${newPackageScript}" -n foo-bar -t
+  "${newPackageScript}" -n foo-bar-baz -t -b
+
+  "${newPackageScript}" -n barn -t -b
+  "${newPackageScript}" -n fubar -t -b
 }
 
-function testEquality() {
-  echo "s3k: ${s3k}"
-  ${_ASSERT_EQUALS_} '"foo"' 1 1
+function oneTimeTearDown() {
+  true #rm -r "${_monorepoDir}"
+}
+
+function testFullBuildOnly() {
+  cd "${_monorepoDir}"
+
+  assertEquals \
+    "full build - regex 'bar' w/ pedantic:" \
+    'stack build --test --no-run-tests --bench --no-run-benchmarks --pedantic bar-api bar-client bar-core bar-server barn foo-bar foo-bar-baz fubar' \
+    "$("${s3kScript}" -p -b 'bar')"
+
+  assertEquals \
+    "full build - regex '^bar' w/ pedantic:" \
+    'stack build --test --no-run-tests --bench --no-run-benchmarks --pedantic bar-api bar-client bar-core bar-server barn' \
+    "$("${s3kScript}" -p -b '^bar')"
+
+  assertEquals \
+    "full build - regex '^bar-.*' w/ pedantic:" \
+    'stack build --test --no-run-tests --bench --no-run-benchmarks --pedantic bar-api bar-client bar-core bar-server' \
+    "$("${s3kScript}" -p -b '^bar-.*')"
+
+  assertEquals \
+    "full build - regex 'bar-server|fubar' w/ pedantic:" \
+    'stack build --test --no-run-tests --bench --no-run-benchmarks --pedantic bar-server fubar' \
+    "$("${s3kScript}" -p -b 'bar-server|fubar')"
+
+  assertEquals \
+    "full build - regex 'bar' w/o pedantic:" \
+    'stack build --test --no-run-tests --bench --no-run-benchmarks bar-api bar-client bar-core bar-server barn foo-bar foo-bar-baz fubar' \
+    "$("${s3kScript}" -p -W -b 'bar')"
+
+  assertEquals \
+    "full build - regex '^bar' w/o pedantic:" \
+    'stack build --test --no-run-tests --bench --no-run-benchmarks bar-api bar-client bar-core bar-server barn' \
+    "$("${s3kScript}" -p -W -b '^bar')"
+
+  assertEquals \
+    "full build - regex '^bar-.*' w/o pedantic:" \
+    'stack build --test --no-run-tests --bench --no-run-benchmarks bar-api bar-client bar-core bar-server' \
+    "$("${s3kScript}" -p -W -b '^bar-.*')"
+
+  assertEquals \
+    "full build - regex 'bar-server|fubar' w/o pedantic:" \
+    'stack build --test --no-run-tests --bench --no-run-benchmarks bar-server fubar' \
+    "$("${s3kScript}" -p -W -b 'bar-server|fubar')"
+}
+
+function testBuildOnly() {
+  cd "${_monorepoDir}"
+
+  assertEquals \
+    "build - regex 'bar' w/ pedantic:" \
+    'stack build --pedantic bar-api bar-client bar-core bar-server barn foo-bar foo-bar-baz fubar' \
+    "$("${s3kScript}" -p -B 'bar')"
+
+  assertEquals \
+    "build - regex '^bar' w/ pedantic:" \
+    'stack build --pedantic bar-api bar-client bar-core bar-server barn' \
+    "$("${s3kScript}" -p -B '^bar')"
+
+  assertEquals \
+    "build - regex '^bar-.*' w/ pedantic:" \
+    'stack build --pedantic bar-api bar-client bar-core bar-server' \
+    "$("${s3kScript}" -p -B '^bar-.*')"
+
+  assertEquals \
+    "build - regex 'bar-server|fubar' w/ pedantic:" \
+    'stack build --pedantic bar-server fubar' \
+    "$("${s3kScript}" -p -B 'bar-server|fubar')"
+
+  assertEquals \
+    "build - regex "bar" w/o pedantic:" \
+    'stack build bar-api bar-client bar-core bar-server barn foo-bar foo-bar-baz fubar' \
+    "$("${s3kScript}" -p -W -B 'bar')"
+
+  assertEquals \
+    "build - regex '^bar' w/o pedantic:" \
+    'stack build bar-api bar-client bar-core bar-server barn' \
+    "$("${s3kScript}" -p -W -B '^bar')"
+
+  assertEquals \
+    "build - regex '^bar-.*' w/o pedantic:" \
+    'stack build bar-api bar-client bar-core bar-server' \
+    "$("${s3kScript}" -p -W -B '^bar-.*')"
+
+  assertEquals \
+    "build - regex 'bar-server|fubar' w/o pedantic:" \
+    'stack build bar-server fubar' \
+    "$("${s3kScript}" -p -W -B 'bar-server|fubar')"
+}
+
+function testTestOnly() {
+  cd "${_monorepoDir}"
+
+  assertEquals \
+    "test - regex 'bar' w/ pedantic:" \
+    'stack test --pedantic bar-api bar-client bar-server barn foo-bar foo-bar-baz fubar' \
+    "$("${s3kScript}" -p -t 'bar')"
+
+  assertEquals \
+    "test - regex '^bar' w/ pedantic:" \
+    'stack test --pedantic bar-api bar-client bar-server barn' \
+    "$("${s3kScript}" -p -t '^bar')"
+
+  assertEquals \
+    "test - regex '^bar-.*' w/ pedantic:" \
+    'stack test --pedantic bar-api bar-client bar-server' \
+    "$("${s3kScript}" -p -t '^bar-.*')"
+
+  assertEquals \
+    "test - regex 'bar-server|fubar' w/ pedantic:" \
+    'stack test --pedantic bar-server fubar' \
+    "$("${s3kScript}" -p -t 'bar-server|fubar')"
+
+  assertEquals \
+    "test - regex 'bar' w/o pedantic:" \
+    'stack test bar-api bar-client bar-server barn foo-bar foo-bar-baz fubar' \
+    "$("${s3kScript}" -p -W -t 'bar')"
+
+  assertEquals \
+    "test - regex '^bar' w/o pedantic:" \
+    'stack test bar-api bar-client bar-server barn' \
+    "$("${s3kScript}" -p -W -t '^bar')"
+
+  assertEquals \
+    "test - regex '^bar-.*' w/o pedantic:" \
+    'stack test bar-api bar-client bar-server' \
+    "$("${s3kScript}" -p -W -t '^bar-.*')"
+
+  assertEquals \
+    "test - regex 'bar-server|fubar' w/o pedantic:" \
+    'stack test bar-server fubar' \
+    "$("${s3kScript}" -p -W -t 'bar-server|fubar')"
+}
+
+function testRunOnly() {
+  true # TODO: Implement me!
+}
+
+function testGhciOnly() {
+  cd "${_monorepoDir}"
+
+  assertEquals \
+    "ghci - regex 'bar-api|bar-client':" \
+    'stack ghci bar-api:lib bar-api:test:bar-api-test-suite bar-client:lib bar-client:test:bar-client-test-suite' \
+    "$("${s3kScript}" -p -g 'bar-api|bar-client')"
+
+  assertEquals \
+    "ghci - regex 'bar-api|bar-client:lib':" \
+    'stack ghci bar-api:lib bar-api:test:bar-api-test-suite bar-client:lib' \
+    "$("${s3kScript}" -p -g 'bar-api|bar-client:lib')"
+
+  assertEquals \
+    "ghci - regex 'bar-api|bar-client:lib, pedantic flag has no effect':" \
+    'stack ghci bar-api:lib bar-api:test:bar-api-test-suite bar-client:lib' \
+    "$("${s3kScript}" -p -W -g 'bar-api|bar-client:lib')"
 }
 
 function main() {
