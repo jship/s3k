@@ -67,74 +67,76 @@ function parseArgs() {
   shift $((OPTIND - 1))
 
   if [ -z "${_projName}" ]; then
-    echo "newPackage: -n NAME is required" >&2
-    exit 1
+    "${_jq}" -nS \
+      --argjson showUsage "${_showUsage}" '{
+          showUsage: $showUsage
+        }'
+  else
+    "${_jq}" -nS \
+      --arg projName "${_projName}" \
+      --argjson includeTestSuite "${_includeTestSuite}" \
+      --argjson includeBenchSuite "${_includeBenchSuite}" \
+      --argjson showUsage "${_showUsage}" '{
+          projName: $projName,
+          modulePath:
+            $projName
+              | split("-")
+              | map(split("") | ([.[0] | ascii_upcase] + .[1:] + ["/"]))
+              | add
+              | (if .[-1] == "/" then .[0:-1] else .[] end)
+              | join("")
+              | (. + ".hs"),
+          testModulePath:
+            $projName
+              | split("-")
+              | map(split("") | ([.[0] | ascii_upcase] + .[1:] + ["/"]))
+              | add
+              | (if .[-1] == "/" then .[0:-1] else .[] end)
+              | join("")
+              | ("Test/" + . + "Spec.hs"),
+          benchModulePath:
+            $projName
+              | split("-")
+              | map(split("") | ([.[0] | ascii_upcase] + .[1:] + ["/"]))
+              | add
+              | (if .[-1] == "/" then .[0:-1] else .[] end)
+              | join("")
+              | ("Bench/" + . + "Benchmarks.hs"),
+          moduleName:
+            $projName
+              | split("-")
+              | map(split("") | ([.[0] | ascii_upcase] + .[1:] + ["."]))
+              | add
+              | (if .[-1] == "." then .[0:-1] else .[] end)
+              | join(""),
+          testModuleName:
+            $projName
+              | split("-")
+              | map(split("") | ([.[0] | ascii_upcase] + .[1:] + ["."]))
+              | add
+              | (if .[-1] == "." then .[0:-1] else .[] end)
+              | join("")
+              | ("Test." + . + "Spec"),
+          benchModuleName:
+            $projName
+              | split("-")
+              | map(split("") | ([.[0] | ascii_upcase] + .[1:] + ["."]))
+              | add
+              | (if .[-1] == "." then .[0:-1] else .[] end)
+              | join("")
+              | ("Bench." + . + "Benchmarks"),
+          functionName:
+            $projName
+              | split("-")
+              | map(split("") | ([.[0]] + .[1:] + ["_"]))
+              | add
+              | (if .[-1] == "_" then .[0:-1] else .[] end)
+              | join(""),
+          includeTestSuite: $includeTestSuite,
+          includeBenchSuite: $includeBenchSuite,
+          showUsage: $showUsage
+        }'
   fi
-
-  "${_jq}" -nS \
-    --arg projName "${_projName}" \
-    --argjson includeTestSuite "${_includeTestSuite}" \
-    --argjson includeBenchSuite "${_includeBenchSuite}" \
-    --argjson showUsage "${_showUsage}" '{
-        projName: $projName,
-        modulePath:
-          $projName
-            | split("-")
-            | map(split("") | ([.[0] | ascii_upcase] + .[1:] + ["/"]))
-            | add
-            | (if .[-1] == "/" then .[0:-1] else .[] end)
-            | join("")
-            | (. + ".hs"),
-        testModulePath:
-          $projName
-            | split("-")
-            | map(split("") | ([.[0] | ascii_upcase] + .[1:] + ["/"]))
-            | add
-            | (if .[-1] == "/" then .[0:-1] else .[] end)
-            | join("")
-            | ("Test/" + . + "Spec.hs"),
-        benchModulePath:
-          $projName
-            | split("-")
-            | map(split("") | ([.[0] | ascii_upcase] + .[1:] + ["/"]))
-            | add
-            | (if .[-1] == "/" then .[0:-1] else .[] end)
-            | join("")
-            | ("Bench/" + . + "Benchmarks.hs"),
-        moduleName:
-          $projName
-            | split("-")
-            | map(split("") | ([.[0] | ascii_upcase] + .[1:] + ["."]))
-            | add
-            | (if .[-1] == "." then .[0:-1] else .[] end)
-            | join(""),
-        testModuleName:
-          $projName
-            | split("-")
-            | map(split("") | ([.[0] | ascii_upcase] + .[1:] + ["."]))
-            | add
-            | (if .[-1] == "." then .[0:-1] else .[] end)
-            | join("")
-            | ("Test." + . + "Spec"),
-        benchModuleName:
-          $projName
-            | split("-")
-            | map(split("") | ([.[0] | ascii_upcase] + .[1:] + ["."]))
-            | add
-            | (if .[-1] == "." then .[0:-1] else .[] end)
-            | join("")
-            | ("Bench." + . + "Benchmarks"),
-        functionName:
-          $projName
-            | split("-")
-            | map(split("") | ([.[0]] + .[1:] + ["_"]))
-            | add
-            | (if .[-1] == "_" then .[0:-1] else .[] end)
-            | join(""),
-        includeTestSuite: $includeTestSuite,
-        includeBenchSuite: $includeBenchSuite,
-        showUsage: $showUsage
-      }'
 }
 
 function shouldShowUsage() {
@@ -154,7 +156,12 @@ function generatePackage() {
   local _opts="$2"
 
   local _projName=''
-  _projName="$("${_jq}" -r '.projName' <<< "${_opts}")"
+  _projName="$("${_jq}" -r '.projName // empty' <<< "${_opts}")"
+
+  if [ -z "${_projName}" ]; then
+    echo "newPackage: -n NAME is required" >&2
+    exit 1
+  fi
 
   local _monorepoDir=''
   _monorepoDir="$(git rev-parse --show-toplevel)/test/monorepo"
