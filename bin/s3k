@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2016
 
+# TODO: Use "${_jq}" everywhere
 # TODO: Check case when no targets are found
 
 # Example of using subshell so that env vars only have to be set once.
@@ -140,7 +141,7 @@ function parseArgs() {
   local _haddockArgs=''
   local _benchTargetRegex=''
   local _benchArgs=''
-  local _loadAlias=''
+  local _loadAliases=()
   local _saveAlias=''
   local _envVars=()
   local _buildWithPedanticFlag='true'
@@ -179,7 +180,7 @@ function parseArgs() {
       M)
         _benchArgs="${OPTARG}";;
       a)
-        _loadAlias="${OPTARG}";;
+        _loadAliases+=("${OPTARG}");;
       s)
         _saveAlias="${OPTARG}";;
       e)
@@ -225,6 +226,16 @@ function parseArgs() {
     _benchArgs=''
   fi
 
+  local _loadAliasesJSON='[]'
+  if [ "${#_loadAliases[@]}" -gt 0 ]; then
+    _loadAliasesJSON=$( \
+      printf '%s\n' "${_loadAliases[@]}" | jq -nR \
+       '[ inputs
+        | select(test("^\\s*$") | not)
+        ]'
+    )
+  fi
+
   local _envVarsJSON='[]'
   if [ "${#_envVars[@]}" -gt 0 ]; then
     _envVarsJSON=$( \
@@ -266,7 +277,7 @@ function parseArgs() {
     --arg haddockArgs "${_haddockArgs}" \
     --arg benchTargetRegex "${_benchTargetRegex}" \
     --arg benchArgs "${_benchArgs}" \
-    --arg loadAlias "${_loadAlias}" \
+    --argjson loadAliases "${_loadAliasesJSON}" \
     --arg saveAlias "${_saveAlias}" \
     --argjson envVars "${_envVarsJSON}" \
     --argjson buildWithPedanticFlag "${_buildWithPedanticFlag}" \
@@ -291,7 +302,7 @@ function parseArgs() {
       | .haddockArgs |= ($haddockArgs | emptyArrayIfEmptyString)
       | .benchTargetRegex |= ($benchTargetRegex | emptyArrayIfEmptyString)
       | .benchArgs |= ($benchArgs | emptyArrayIfEmptyString)
-      | .loadAlias |= ($loadAlias | nullIfEmptyString)
+      | .loadAliases |= $loadAliases
       | .saveAlias |= ($saveAlias | nullIfEmptyString)
       | .envVars |= $envVars
       | .buildWithPedanticFlag |= $buildWithPedanticFlag
@@ -463,38 +474,36 @@ function regenProjectCache() {
     > "${_cacheDir}/ghci-targets"
 }
 
-function loadAlias() {
+function loadAliases() {
   local _jq="$1"
   local _configFile="$2"
   local _projRoot="$3"
   local _opts="$4"
 
-  local _aliasName=''
-  _aliasName="$("${_jq}" -r '.loadAlias // empty' <<< "${_opts}")"
+  local _mergedAlias=''
+  _mergedAlias=$("${_jq}" -nS '{
+    fullBuildTargetRegex: [],
+    buildTargetRegex: [],
+    testTargetRegex: [],
+    testArgs: [],
+    runTargetRegex: [],
+    runArgs: [],
+    ghciTargetRegex: [],
+    ghciArgs: [],
+    haddockTargetRegex: [],
+    haddockArgs: [],
+    benchTargetRegex: [],
+    benchArgs: [],
+    envVars: [],
+    arbitraryCommand: [],
+    stackArgs: []
+  }')
 
-  local _alias=''
-  if [ -z "${_aliasName}" ]; then
-    _alias=$(
-      "${_jq}" -nS \
-        '{
-           fullBuildTargetRegex: [],
-           buildTargetRegex: [],
-           testTargetRegex: [],
-           testArgs: [],
-           runTargetRegex: [],
-           runArgs: [],
-           ghciTargetRegex: [],
-           ghciArgs: [],
-           haddockTargetRegex: [],
-           haddockArgs: [],
-           benchTargetRegex: [],
-           benchArgs: [],
-           envVars: [],
-           arbitraryCommand: [],
-           stackArgs: []
-         }'
-    )
-  else
+  local _aliasName=''
+
+  local _line=''
+  while IFS='' read -r _line; do
+    _aliasName="${_line}"
     _alias=$(
       "${_jq}" -S \
         --arg projRoot "${_projRoot}" \
@@ -507,9 +516,28 @@ function loadAlias() {
       echo "s3k: Alias \"${_aliasName}\" does not exist" >&2
       exit 1
     fi
-  fi
 
-  echo "${_alias}"
+    _mergedAlias=$("${_jq}" -n '
+      {
+        fullBuildTargetRegex: ($ARGS.positional[0].fullBuildTargetRegex + $ARGS.positional[1].fullBuildTargetRegex),
+        buildTargetRegex: ($ARGS.positional[0].buildTargetRegex + $ARGS.positional[1].buildTargetRegex),
+        testTargetRegex: ($ARGS.positional[0].testTargetRegex + $ARGS.positional[1].testTargetRegex),
+        testArgs: ($ARGS.positional[0].testArgs + $ARGS.positional[1].testArgs),
+        runTargetRegex: ($ARGS.positional[0].runTargetRegex + $ARGS.positional[1].runTargetRegex),
+        runArgs: ($ARGS.positional[0].runArgs + $ARGS.positional[1].runArgs),
+        ghciTargetRegex: ($ARGS.positional[0].ghciTargetRegex + $ARGS.positional[1].ghciTargetRegex),
+        ghciArgs: ($ARGS.positional[0].ghciArgs + $ARGS.positional[1].ghciArgs),
+        haddockTargetRegex: ($ARGS.positional[0].haddockTargetRegex + $ARGS.positional[1].haddockTargetRegex),
+        haddockArgs: ($ARGS.positional[0].haddockArgs + $ARGS.positional[1].haddockArgs),
+        benchTargetRegex: ($ARGS.positional[0].benchTargetRegex + $ARGS.positional[1].benchTargetRegex),
+        benchArgs: ($ARGS.positional[0].benchArgs + $ARGS.positional[1].benchArgs),
+        envVars: ($ARGS.positional[0].envVars + $ARGS.positional[1].envVars),
+        arbitraryCommand: ($ARGS.positional[0].arbitraryCommand + $ARGS.positional[1].arbitraryCommand),
+        stackArgs: ($ARGS.positional[0].stackArgs + $ARGS.positional[1].stackArgs)
+      }' --jsonargs "${_mergedAlias}" "${_alias}")
+  done < <(jq -r '.loadAliases[]' <<< "${_opts}")
+
+  echo "${_mergedAlias}"
 }
 
 function mergeAliasWithOpts() {
@@ -532,7 +560,7 @@ function mergeAliasWithOpts() {
       haddockArgs: ($ARGS.positional[0].haddockArgs + $ARGS.positional[1].haddockArgs),
       benchTargetRegex: ($ARGS.positional[0].benchTargetRegex + $ARGS.positional[1].benchTargetRegex) | unique,
       benchArgs: ($ARGS.positional[0].benchArgs + $ARGS.positional[1].benchArgs),
-      loadAlias: $ARGS.positional[0].loadAlias,
+      loadAliases: $ARGS.positional[0].loadAliases,
       saveAlias: $ARGS.positional[0].saveAlias,
       envVars: ($ARGS.positional[0].envVars + $ARGS.positional[1].envVars) | unique,
       buildWithPedanticFlag: $ARGS.positional[0].buildWithPedanticFlag,
@@ -893,11 +921,11 @@ function main() {
   shouldRegenProjectCache "${_jq}" "${_opts}" "${_cacheDir}" \
     && regenProjectCache "${_jq}" "${_cacheDir}"
 
-  local _alias=''
-  _alias="$(loadAlias "${_jq}" "${_configFile}" "${_projRoot}" "${_opts}")"
+  local _mergedAlias=''
+  _mergedAlias="$(loadAliases "${_jq}" "${_configFile}" "${_projRoot}" "${_opts}")"
 
   local _augmentedOpts=''
-  _augmentedOpts="$(mergeAliasWithOpts "${_jq}" "${_opts}" "${_alias}")"
+  _augmentedOpts="$(mergeAliasWithOpts "${_jq}" "${_opts}" "${_mergedAlias}")"
 
   saveAlias "${_jq}" "${_projRoot}" "${_augmentedOpts}"
 
@@ -905,6 +933,7 @@ function main() {
 
   #jq < "$(findConfigFile "${_jq}")"
   #jq <<< "${_augmentedOpts}"
+  #jq <<< "${_opts}"
 }
 
 main "$@"
