@@ -48,6 +48,7 @@ OPTIONS
   -W           Build without '--pedantic' flag
   -x CMD       Execute an arbitrary command if the generated command succeeds
                  (be sure to quote CMD)
+  -c           Print path to config file
   -C           Regenerate cached project info
   -V           Print version
   -h           Show help
@@ -146,12 +147,13 @@ function parseArgs() {
   local _envVars=()
   local _buildWithPedanticFlag='true'
   local _arbitraryCommand=''
+  local _printConfigFilePath='false'
   local _regenProjectCache='false'
   local _printVersion='false'
   local _showUsage='false'
   local _showDetailedUsage='false'
 
-  while getopts pb:B:t:T:r:R:g:G:k:K:m:M:a:s:e:Wx:CVhH _opt; do
+  while getopts pb:B:t:T:r:R:g:G:k:K:m:M:a:s:e:Wx:cCVhH _opt; do
     case "${_opt}" in
       p)
         _execute='false';;
@@ -189,6 +191,8 @@ function parseArgs() {
         _buildWithPedanticFlag='false';;
       x)
         _arbitraryCommand="${OPTARG}";;
+      c)
+        _printConfigFilePath='true';;
       C)
         _regenProjectCache='true';;
       V)
@@ -282,6 +286,7 @@ function parseArgs() {
     --argjson envVars "${_envVarsJSON}" \
     --argjson buildWithPedanticFlag "${_buildWithPedanticFlag}" \
     --arg arbitraryCommand "${_arbitraryCommand}" \
+    --argjson printConfigFilePath "${_printConfigFilePath}" \
     --argjson regenProjectCache "${_regenProjectCache}" \
     --argjson printVersion "${_printVersion}" \
     --argjson showUsage "${_showUsage}" \
@@ -307,6 +312,7 @@ function parseArgs() {
       | .envVars |= $envVars
       | .buildWithPedanticFlag |= $buildWithPedanticFlag
       | .arbitraryCommand |= ($arbitraryCommand | emptyArrayIfEmptyString)
+      | .printConfigFilePath |= $printConfigFilePath
       | .regenProjectCache |= $regenProjectCache
       | .printVersion |= $printVersion
       | .showUsage |= $showUsage
@@ -336,6 +342,20 @@ function shouldShowDetailedUsage() {
 
 function showDetailedUsage() {
   detailedUsage
+  exit 0
+}
+
+function shouldPrintConfigFilePath() {
+  local _jq="$1"
+  local _opts="$2"
+
+  "${_jq}" -e '.printConfigFilePath' > /dev/null <<< "${_opts}"
+}
+
+function printConfigFilePath() {
+  local _jq="$1"
+
+  findConfigFile "${_jq}"
   exit 0
 }
 
@@ -909,6 +929,8 @@ function main() {
     && showUsage
   shouldPrintVersion "${_jq}" "${_opts}" \
     && printVersion
+  shouldPrintConfigFilePath "${_jq}" "${_opts}" \
+    && printConfigFilePath "${_jq}"
 
   local _configFile
   _configFile="$(findConfigFile "${_jq}")"
