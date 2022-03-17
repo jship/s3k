@@ -54,39 +54,85 @@ OPTIONS
 ARGS
   <STACK_ARG>  Additional arguments to pass to 'stack'
 
-               Note that these args are passed to all 'stack'
-               invocations in a generated command, not including
-               possible 'stack' invocations specified directly by the
-               user via '-x' or '-X'. A generated command will have
-               multiple 'stack' invocations if at least two of the
+               Note that these args are passed to all 'stack' invocations in a
+               generated command, not including possible 'stack' invocations
+               specified directly by the user via '-x'. A generated command will
+               have multiple 'stack' invocations if at least two of the
                following options are present:
 
                -b, -B, -t, -r, -g, -k, -m
 
-               Considering the above warning, it is typically only
-               useful to supply STACK_ARG arguments when lasering in
-               on a specific task with 's3k', whether that task is
-               building, testing, running a binary, etc.
+               Considering the above warning, it is typically only useful to
+               supply STACK_ARG arguments when lasering in on a specific task
+               with 's3k', whether that task is building, testing, running a
+               binary, etc.
 
-               If 's3k' is invoked with only STACK_ARG arguments and no
-               options, then 's3k' is effectively a pass-through wrapper
-               around 'stack' itself with a name that is two characters
-               shorter.
+               If 's3k' is invoked with only STACK_ARG arguments and no options,
+               then 's3k' is effectively a pass-through wrapper around 'stack'
+               itself with a name that is two characters shorter.
 EOF
 }
 
 function detailedUsage() {
   usage
-  cat <<EOF
+  cat <<'EOF'
 
-DETAILS
+ENVIRONMENT
 
-This script is a wrapper around 'stack'. STUB.
+'s3k' respects the following environment variables:
+
+* S3K_CONFIG_HOME
+* S3K_PATH_JQ
+* S3K_PATH_STACK
+
+Aliasing commands is driven by a config file. By default, this config file will
+be at "${XDG_CONFIG_HOME}/s3k/config.json" if the 'XDG_CONFIG_HOME' environment
+variable is populated. Otherwise, the config file will be at
+"${HOME}/.s3k/config.json". The user is free to override the directory in which
+'s3k' will write its config file via the 'S3K_CONFIG_HOME' environment variable.
+
+Outside of (mostly) standard *nix utilities like 'awk', 'cut', 'sort', and
+friends, 's3k' does not assume the binaries it leverages - namely 'jq' and
+'stack' - exist on the user's runtime path. 's3k' looks for these binaries first
+by checking if the binary's path is specified in the appropriate environment
+variable ('S3K_PATH_JQ' and 'S3K_PATH_STACK'), and if not, falling back to using
+the binary on the user's runtime path if available. 's3k' requires these
+binaries, so if the script is unable to find themm, it will error out.
 
 EXAMPLES
 
-View the script's help:
+View script's help:
 $ s3k -h
+
+Build packages with names containing 'foo':
+$ s3k -b foo
+
+Print invocation to build packages with names containing 'foo':
+$ s3k -b foo -p
+
+Test packages containing the whole word 'foo':
+# s3k -t '\<foo\>'
+
+Build and then run binary named 'foo-server':
+# s3k -r 'foo-server'
+
+Run GHCi with lib targets from packages with 'foo' or 'bar' prefixes:
+# s3k -g '^(foo|bar).*:lib'
+
+Alias running GHCi with lib targets from packages with 'foo' or 'bar' prefixes:
+# s3k -g '^(foo|bar).*:lib*' -s ghci-foo-bar -p
+
+Run GHCi via the alias created in the previous example:
+# s3k -a ghci-foo-bar
+
+Run ghcid using the previous example's alias as input:
+# ghcid --command "$(s3k -a ghci-foo-bar -p)"
+
+Save the previous command to an alias:
+# s3k -x 'ghcid --command "$(s3k -a ghci-foo-bar -p)"' -s ghcid-foo-bar -p
+
+Run ghcid via the alias created in the previous example:
+# s3k -a ghcid-foo-bar
 EOF
 }
 
@@ -384,7 +430,7 @@ function findConfigFile() {
   elif [ -d "${HOME}" ]; then
     _configHome="${HOME}/.s3k"
   else
-    echo "s3k: Unable to find config dir. You can declare a dir via S3K_CONFIG_HOME?" >&2
+    echo "s3k: Unable to find config dir. You can specify a dir via S3K_CONFIG_HOME." >&2
     exit 1
   fi
 
