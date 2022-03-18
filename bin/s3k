@@ -326,7 +326,6 @@ function parseArgs() {
     )
   fi
 
-  # TODO: Clean this up
   "${_jq}" -nS \
     --argjson execute "${_execute}"  \
     --arg fullBuildTargetRegex "${_fullBuildTargetRegex}" \
@@ -357,34 +356,35 @@ function parseArgs() {
     --argjson stackArgs "${_stackArgsJSON}" '
       def nullIfEmptyString: if . == "" then null else . end;
       def emptyArrayIfEmptyString: if . == "" then [] else [.] end;
-        .execute |= $execute
-      | .fullBuildTargetRegex |= ($fullBuildTargetRegex | emptyArrayIfEmptyString)
-      | .buildTargetRegex |= ($buildTargetRegex | emptyArrayIfEmptyString)
-      | .testTargetRegex |= ($testTargetRegex | emptyArrayIfEmptyString)
-      | .testArgs |= ($testArgs | emptyArrayIfEmptyString)
-      | .runTargetRegex |= ($runTargetRegex | emptyArrayIfEmptyString)
-      | .runArgs |= ($runArgs | emptyArrayIfEmptyString)
-      | .ghciTargetRegex |= ($ghciTargetRegex | emptyArrayIfEmptyString)
-      | .ghciArgs |= ($ghciArgs | emptyArrayIfEmptyString)
-      | .haddockTargetRegex |= ($haddockTargetRegex | emptyArrayIfEmptyString)
-      | .haddockArgs |= ($haddockArgs | emptyArrayIfEmptyString)
-      | .benchTargetRegex |= ($benchTargetRegex | emptyArrayIfEmptyString)
-      | .benchArgs |= ($benchArgs | emptyArrayIfEmptyString)
-      | .loadAliases |= $loadAliases
-      | .saveAlias |= ($saveAlias | nullIfEmptyString)
-      | .saveGlobalAlias |= ($saveGlobalAlias | nullIfEmptyString)
-      | .deleteAlias |= ($deleteAlias | nullIfEmptyString)
-      | .deleteGlobalAlias |= ($deleteGlobalAlias | nullIfEmptyString)
-      | .envVars |= $envVars
-      | .buildWithPedanticFlag |= $buildWithPedanticFlag
-      | .arbitraryCommand |= ($arbitraryCommand | emptyArrayIfEmptyString)
-      | .printConfigFilePath |= $printConfigFilePath
-      | .regenProjectCache |= $regenProjectCache
-      | .printVersion |= $printVersion
-      | .showUsage |= $showUsage
-      | .showDetailedUsage |= $showDetailedUsage
-      | .stackArgs |= $stackArgs
-      '
+      {
+        execute: $execute,
+        fullBuildTargetRegex: ($fullBuildTargetRegex | emptyArrayIfEmptyString),
+        buildTargetRegex: ($buildTargetRegex | emptyArrayIfEmptyString),
+        testTargetRegex: ($testTargetRegex | emptyArrayIfEmptyString),
+        testArgs: ($testArgs | emptyArrayIfEmptyString),
+        runTargetRegex: ($runTargetRegex | emptyArrayIfEmptyString),
+        runArgs: ($runArgs | emptyArrayIfEmptyString),
+        ghciTargetRegex: ($ghciTargetRegex | emptyArrayIfEmptyString),
+        ghciArgs: ($ghciArgs | emptyArrayIfEmptyString),
+        haddockTargetRegex: ($haddockTargetRegex | emptyArrayIfEmptyString),
+        haddockArgs: ($haddockArgs | emptyArrayIfEmptyString),
+        benchTargetRegex: ($benchTargetRegex | emptyArrayIfEmptyString),
+        benchArgs: ($benchArgs | emptyArrayIfEmptyString),
+        loadAliases: $loadAliases,
+        saveAlias: ($saveAlias | nullIfEmptyString),
+        saveGlobalAlias: ($saveGlobalAlias | nullIfEmptyString),
+        deleteAlias: ($deleteAlias | nullIfEmptyString),
+        deleteGlobalAlias: ($deleteGlobalAlias | nullIfEmptyString),
+        envVars: $envVars,
+        buildWithPedanticFlag: $buildWithPedanticFlag,
+        arbitraryCommand: ($arbitraryCommand | emptyArrayIfEmptyString),
+        printConfigFilePath: $printConfigFilePath,
+        regenProjectCache: $regenProjectCache,
+        printVersion: $printVersion,
+        showUsage: $showUsage,
+        showDetailedUsage: $showDetailedUsage,
+        stackArgs: $stackArgs
+      }'
 }
 
 function shouldShowUsage() {
