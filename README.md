@@ -80,6 +80,10 @@ installation is pretty straightforward:
    ```
    export PATH="$PATH:/path/to/s3k/bin"
    ```
+1. Make the script executable:
+   ```
+   chmod +x /path/to/s3k/bin/s3k
+   ```
 1. _Optional:_ Install the completion script.
    TODO: STUB
 
