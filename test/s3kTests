@@ -203,9 +203,105 @@ function testGhciOnly() {
     "$("${s3kScript}" -p -W -g 'bar-api|bar-client:lib')"
 }
 
+function usage() {
+  cat <<EOF
+s3kTests - Test suite for 's3k'
+
+USAGE
+  s3kTests [OPTIONS]
+
+OPTIONS
+  -m           Generate the test suite's monorepo but do not run tests
+  -h           Show help
+EOF
+}
+
+function findJqOrDie() {
+  local _jq=''
+  if [ -x "${S3K_PATH_JQ}" ]; then
+    _jq="${S3K_PATH_JQ}"
+  elif command -v 'jq' &>/dev/null; then
+    _jq='jq'
+  else
+    echo "s3kTests: 'jq' binary not found on runtime path or S3K_PATH_JQ" >&2
+    exit 1
+  fi
+
+  echo "${_jq}"
+}
+
+function parseArgs() {
+  local _jq="$1"
+  shift 1
+
+  local OPTARG
+  local OPTIND
+  local _opt
+
+  local _genMonorepoOnly='false'
+  local _showUsage='false'
+
+  while getopts mh _opt; do
+    case "${_opt}" in
+      m)
+        _genMonorepoOnly='true';;
+      h)
+        _showUsage='true';;
+      \?)
+        usage >&2
+        exit 1
+        ;;
+    esac
+  done
+
+  shift $((OPTIND - 1))
+
+  "${_jq}" -nS \
+    --argjson genMonorepoOnly "${_genMonorepoOnly}" \
+    --argjson showUsage "${_showUsage}" '{
+        genMonorepoOnly: $genMonorepoOnly,
+        showUsage: $showUsage
+      }'
+}
+
+function shouldShowUsage() {
+  local _jq="$1"
+  local _opts="$2"
+
+  "${_jq}" -e '.showUsage' > /dev/null <<< "${_opts}"
+}
+
+function showUsage() {
+  usage
+  exit 0
+}
+
+function shouldGenMonorepoOnly() {
+  local _jq="$1"
+  local _opts="$2"
+
+  "${_jq}" -e '.genMonorepoOnly' > /dev/null <<< "${_opts}"
+}
+
+function genMonorepoOnly() {
+  oneTimeSetUp
+  exit 0
+}
+
 function main() {
+  local _jq
+  _jq="$(findJqOrDie)"
+
+  local _opts
+  _opts="$(parseArgs "${_jq}" "$@")"
+
+  shouldShowUsage "${_jq}" "${_opts}" \
+    && showUsage
+  shouldGenMonorepoOnly "${_jq}" "${_opts}" \
+    && genMonorepoOnly
+
   # We download 'shunit2' to a temporary directory that is deleted on exit
-  # rather than check copy 'shunit2' into the 's3k' repo.
+  # rather than copy 'shunit2' into the 's3k' repo.
   curl -sLo "${tempDir}/shunit2-2.1.8.tar.gz" \
     https://github.com/kward/shunit2/archive/refs/tags/v2.1.8.tar.gz
   tar xf "${tempDir}/shunit2-2.1.8.tar.gz" \
@@ -213,4 +309,4 @@ function main() {
   source "${tempDir}/shunit2"
 }
 
-main
+main "$@"
