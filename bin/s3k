@@ -461,8 +461,7 @@ function addProjectToConfigFile() {
 
   local _cacheDirName=''
 
-  local _tempFile
-  _tempFile="${tempDir}/config.json.temp"
+  local _tempFile="${tempDir}/config.json.temp"
   cp "${_configFile}" "${_tempFile}"
 
   if ! "${_jq}" -e --arg projKey "${_projRoot}" '.projects | has($projKey)' \
@@ -659,7 +658,7 @@ function saveAlias() {
   local _globalAliasName=''
   _globalAliasName="$("${_jq}" -r '.saveGlobalAlias // empty' <<< "${_opts}")"
 
-  local _tempFile=''
+  local _tempFile="${tempDir}/config.json.temp"
 
   local _alias=''
 
@@ -685,7 +684,6 @@ function saveAlias() {
          }' <<< "${_opts}"
     )
 
-    _tempFile="${tempDir}/config.json.temp"
     cp "${_configFile}" "${_tempFile}"
     "${_jq}" -S \
       --arg projRoot "${_projRoot}" \
@@ -986,16 +984,17 @@ function processCommandList() {
   fi
 
   if [ "${#_finalCommand[@]}" -eq 0 ]; then
-    _finalCommand+=('stack')
     if [ "${#_stackArgs[@]}" -gt 0 ]; then
-      _finalCommand+=("${_stackArgs[@]}")
+      _finalCommand+=('stack' "${_stackArgs[@]}")
     fi
   fi
 
-  if "${_jq}" -e '.execute' > /dev/null <<< "${_opts}"; then
-    eval "${_finalCommand[*]}"
-  else
-    echo "${_finalCommand[*]}"
+  if [ "${#_finalCommand[@]}" -gt 0 ]; then
+    if "${_jq}" -e '.execute' > /dev/null <<< "${_opts}"; then
+      eval "${_finalCommand[*]}"
+    else
+      echo "${_finalCommand[*]}"
+    fi
   fi
 }
 
