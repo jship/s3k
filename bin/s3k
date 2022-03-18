@@ -3,11 +3,18 @@
 
 # TODO: Check case when no targets are found
 
-# TODO: Trap for cleanup
-
 set -o errexit
 set -o pipefail
 [[ "${DEBUG}" == 'true' ]] && set -o xtrace
+
+declare -g tempDir=''
+tempDir="$(mktemp -d)"
+function removeTempDir() {
+  if [ -d "${tempDir}" ]; then
+    rm -rf "${tempDir}"
+  fi
+}
+trap removeTempDir EXIT
 
 declare -r version='0.0.0'
 
@@ -456,7 +463,7 @@ function addProjectToConfigFile() {
   local _cacheDirName=''
 
   local _tempFile
-  _tempFile="$(mktemp)"
+  _tempFile="${tempDir}/config.json.temp"
   cp "${_configFile}" "${_tempFile}"
 
   if ! "${_jq}" -e --arg projKey "${_projRoot}" '.projects | has($projKey)' \
@@ -679,7 +686,7 @@ function saveAlias() {
          }' <<< "${_opts}"
     )
 
-    _tempFile="$(mktemp)"
+    _tempFile="${tempDir}/config.json.temp"
     cp "${_configFile}" "${_tempFile}"
     "${_jq}" -S \
       --arg projRoot "${_projRoot}" \
@@ -711,7 +718,6 @@ function saveAlias() {
          }' <<< "${_opts}"
     )
 
-    _tempFile="$(mktemp)"
     cp "${_configFile}" "${_tempFile}"
     "${_jq}" -S \
       --arg globalAliasName "${_globalAliasName}" \
