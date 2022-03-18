@@ -2,72 +2,92 @@
 
 ## Synopsis
 
-`s3k` sits between the Haskell developer and `stack`, aiming to improve
-productivity when working in monorepos. The two main features are:
+`s3k` is a script that sits between the Haskell developer and `stack`, aiming to
+improve productivity when working in monorepos. The two main features are:
 
-1. Specifying packages/targets for building/testing/GHCi/etc via extended
-   regular expressions
+1. Concise package/target selections via extended regular expressions
 1. Aliasing invocations
 
 ## Crash Course
 
-Build packages with names containing `foo`:
+For a thorough walkthrough of `s3k`, please see the [user guide](./GUIDE.md).
+The snippet below is a crash course on `s3k`'s usage:
 
 ```
-$ s3k -b foo
+$ stack ide packages --stdout
+bar-core
+bar-server
+barn
+baz
+foo-bar
+fubar
+
+$ s3k -b bar -p
+stack build --test --no-run-tests --bench --no-run-benchmarks --pedantic bar-core bar-server barn foo-bar fubar
+
+$ s3k -b '\<bar\>' -p
+stack build --test --no-run-tests --bench --no-run-benchmarks --pedantic bar-core bar-server foo-bar
+
+$ s3k -b '^\<bar\>' -p
+stack build --test --no-run-tests --bench --no-run-benchmarks --pedantic bar-core bar-server
+
+$ s3k -g '^\<(foo|bar)\>.*:lib' -p
+stack ghci bar-core:lib bar-server:lib foo-bar:lib
+
+$ s3k -g '^\<(foo|bar)\>.*:lib' -s ghci-foo-bar -p
+stack ghci bar-core:lib bar-server:lib foo-bar:lib
+
+$ s3k -a ghci-foo-bar -p
+stack ghci bar-core:lib bar-server:lib foo-bar:lib
+
+$ s3k -x 'ghcid --command "$(s3k -a ghci-foo-bar -p)"' -p
+ghcid --command "$(s3k -a ghci-foo-bar -p)"
+
+$ s3k -x 'ghcid --command "$(s3k -a ghci-foo-bar -p)"' -s ghcid-foo-bar -p
+ghcid --command "$(s3k -a ghci-foo-bar -p)"
+
+$ s3k -a ghcid-foo-bar -p
+ghcid --command "$(s3k -a ghci-foo-bar -p)"
 ```
 
-Print invocation to build packages with names containing `foo`:
-
-```
-$ s3k -b foo -p
-```
-
-Test packages containing the whole word `foo`:
-
-```
-# s3k -t '\<foo\>'
-```
-
-Run GHCi with lib targets from packages with `foo` or `bar` prefixes:
-
-```
-# s3k -g '^(foo|bar).*:lib'
-```
-
-Alias running GHCi with lib targets from packages with `foo` or `bar` prefixes:
-
-```
-# s3k -g '^(foo|bar).*:lib*' -s ghci-foo-bar -p
-```
-
-Run GHCi via the alias created in the previous example:
-
-```
-# s3k -a ghci-foo-bar
-```
-
-Run ghcid using the previous example's alias as input:
-
-```
-# ghcid --command "$(s3k -a ghci-foo-bar -p)"
-```
-
-Save the previous command to an alias:
-
-```
-# s3k -x 'ghcid --command "$(s3k -a ghci-foo-bar -p)"' -s ghcid-foo-bar -p
-```
-
-Run ghcid via the alias created in the previous example:
-
-```
-# s3k -a ghcid-foo-bar
-```
+There is a strong emphasis on ensuring the dev has to type as little as
+possible. Please see the [Goals](#goals) section for additional detail.
 
 ## Installation
 
-STUB
+### Manual install
+
+`s3k` is a single `bash` script and an optional completion script, so
+installation is pretty straightforward:
+
+1. Clone the repo:
+   ```
+   git clone https://github.com/jship/s3k.git
+   ```
+   If you'd like to hack on `s3k`, feel free to fork and clone that instead.
+1. Edit your runtime path `~/.bashrc`/`~/.bash_profile` (or wherever makes sense
+   on your system) to include the repo's `bin` directory
+   ```
+   export PATH="$PATH:/path/to/s3k/bin"
+   ```
+1. _Optional:_ Install the completion script.
+   TODO: STUB
+
+If, like the author, you find that even `s3k` is too many characters to type,
+you may wish to add an alias to your system:
+
+```
+alias s='s3k'
+```
+
+### Install via package manager
+
+At this time, there is no support for installing `s3k` via package managers.
+Fortunately, it is only a single `bash` script and so can be [installed
+manually](#manual-install) with minimal fuss.
+
+If you would like to add support for installing `s3k` via a particular package
+manager, please feel free to reach out and contribute!
 
 ## Goals
 
@@ -81,8 +101,8 @@ docs aim to provide sufficient examples so that everyone can be productive right
 away.
 
 Most developers do not yearn to conjure up regexes every time they need to
-interact with some slice of a monorepo though, and `s3k would be inhumane if it
-expected them to do so. For this reason, 's3k' heavily encourages aliasing
+interact with some slice of a monorepo though, and `s3k` would be inhumane if it
+expected them to do so. For this reason, `s3k` heavily encourages aliasing
 commands. The developer can type in their desired regex, save it away in an
 alias, and then never think about the regex again.
 
