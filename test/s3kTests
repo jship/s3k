@@ -40,6 +40,8 @@ function oneTimeSetUp() {
 
   "${newPackageScript}" -n barn -t -b
   "${newPackageScript}" -n fubar -t -b
+
+  (cd "${_monorepoDir}" && "${s3kScript}" -C)
 }
 
 function oneTimeTearDown() {
