@@ -46,6 +46,8 @@ OPTIONS
                  (this option may be specified multiple times)
   -s ALIAS     Save the final command to a project-specific alias
   -S ALIAS     Save the final command to a global alias
+  -d ALIAS     Delete a project-specific alias
+  -D ALIAS     Delete a global alias
   -e KEY=VAL   Use an environment variable in the final command
                  (this option may be specified multiple times)
   -W           Build without '--pedantic' flag
@@ -194,6 +196,8 @@ function parseArgs() {
   local _loadAliases=()
   local _saveAlias=''
   local _saveGlobalAlias=''
+  local _deleteAlias=''
+  local _deleteGlobalAlias=''
   local _envVars=()
   local _buildWithPedanticFlag='true'
   local _arbitraryCommand=''
@@ -203,7 +207,7 @@ function parseArgs() {
   local _showUsage='false'
   local _showDetailedUsage='false'
 
-  while getopts pb:B:t:T:r:R:g:G:k:K:m:M:a:s:S:e:Wx:cCVhH _opt; do
+  while getopts pb:B:t:T:r:R:g:G:k:K:m:M:a:s:S:d:D:e:Wx:cCVhH _opt; do
     case "${_opt}" in
       p)
         _execute='false';;
@@ -237,6 +241,10 @@ function parseArgs() {
         _saveAlias="${OPTARG}";;
       S)
         _saveGlobalAlias="${OPTARG}";;
+      d)
+        _deleteAlias="${OPTARG}";;
+      D)
+        _deleteGlobalAlias="${OPTARG}";;
       e)
         _envVars+=("${OPTARG}");;
       W)
@@ -336,6 +344,8 @@ function parseArgs() {
     --argjson loadAliases "${_loadAliasesJSON}" \
     --arg saveAlias "${_saveAlias}" \
     --arg saveGlobalAlias "${_saveGlobalAlias}" \
+    --arg deleteAlias "${_deleteAlias}" \
+    --arg deleteGlobalAlias "${_deleteGlobalAlias}" \
     --argjson envVars "${_envVarsJSON}" \
     --argjson buildWithPedanticFlag "${_buildWithPedanticFlag}" \
     --arg arbitraryCommand "${_arbitraryCommand}" \
@@ -363,6 +373,8 @@ function parseArgs() {
       | .loadAliases |= $loadAliases
       | .saveAlias |= ($saveAlias | nullIfEmptyString)
       | .saveGlobalAlias |= ($saveGlobalAlias | nullIfEmptyString)
+      | .deleteAlias |= ($deleteAlias | nullIfEmptyString)
+      | .deleteGlobalAlias |= ($deleteGlobalAlias | nullIfEmptyString)
       | .envVars |= $envVars
       | .buildWithPedanticFlag |= $buildWithPedanticFlag
       | .arbitraryCommand |= ($arbitraryCommand | emptyArrayIfEmptyString)
@@ -636,6 +648,8 @@ function mergeAliasWithOpts() {
       loadAliases: $ARGS.positional[0].loadAliases,
       saveAlias: $ARGS.positional[0].saveAlias,
       saveGlobalAlias: $ARGS.positional[0].saveGlobalAlias,
+      deleteAlias: $ARGS.positional[0].deleteAlias,
+      deleteGlobalAlias: $ARGS.positional[0].deleteGlobalAlias,
       envVars: ($ARGS.positional[0].envVars + $ARGS.positional[1].envVars) | unique,
       buildWithPedanticFlag: $ARGS.positional[0].buildWithPedanticFlag,
       arbitraryCommand: ($ARGS.positional[0].arbitraryCommand + $ARGS.positional[1].arbitraryCommand),
@@ -720,6 +734,42 @@ function saveAlias() {
       --arg globalAliasName "${_globalAliasName}" \
       --argjson alias "${_alias}" '
         .globalAliases[$globalAliasName] |= $alias
+      ' > "${_configFile}" < "${_tempFile}"
+  fi
+}
+
+function deleteAlias() {
+  local _jq="$1"
+  local _projRoot="$2"
+  local _opts="$3"
+
+  local _aliasName=''
+  _aliasName="$("${_jq}" -r '.deleteAlias // empty' <<< "${_opts}")"
+
+  local _globalAliasName=''
+  _globalAliasName="$("${_jq}" -r '.deleteGlobalAlias // empty' <<< "${_opts}")"
+
+  local _tempFile="${tempDir}/config.json.temp"
+
+  # N.B. We could check if the aliases do not exist in the user's config fileand
+  # either warn/error out, but instead we opt to just try to delete them if they
+  # exist. If they don't exist, the user's config file will not be modified
+  # thanks to jq's 'del' function playing very nicely.
+
+  if [ -n "${_aliasName}" ]; then
+    cp "${_configFile}" "${_tempFile}"
+    "${_jq}" -S \
+      --arg projRoot "${_projRoot}" \
+      --arg aliasName "${_aliasName}" '
+        del(.projects[$projRoot].aliases[$aliasName])
+      ' > "${_configFile}" < "${_tempFile}"
+  fi
+
+  if [ -n "${_globalAliasName}" ]; then
+    cp "${_configFile}" "${_tempFile}"
+    "${_jq}" -S \
+      --arg globalAliasName "${_globalAliasName}" '
+        del(.globalAliases[$globalAliasName])
       ' > "${_configFile}" < "${_tempFile}"
   fi
 }
@@ -1038,6 +1088,7 @@ function main() {
   _augmentedOpts="$(mergeAliasWithOpts "${_jq}" "${_opts}" "${_mergedAlias}")"
 
   saveAlias "${_jq}" "${_projRoot}" "${_augmentedOpts}"
+  deleteAlias "${_jq}" "${_projRoot}" "${_augmentedOpts}"
 
   processCommandList "${_jq}" "${_augmentedOpts}" "${_cacheDir}"
 }
