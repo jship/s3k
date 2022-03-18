@@ -60,13 +60,23 @@ possible. Please see the [Goals](#goals) section for additional detail.
 `s3k` is a single `bash` script and an optional completion script, so
 installation is pretty straightforward:
 
+1. Ensure [`jq`][] and [`stack`][] are installed and available on your runtime
+   path:
+   ```
+   $ command -v jq &>/dev/null || echo "jq is not on runtime path" >&2
+   $ command -v stack &>/dev/null || echo "stack is not on runtime path" >&2
+   ```
+   If you prefer not having these tools on your runtime path, you may tell `s3k`
+   where they are on your system via the `S3K_PATH_JQ` and `S3K_PATH_STACK`
+   environment variables.
 1. Clone the repo:
    ```
    git clone https://github.com/jship/s3k.git
    ```
-   If you'd like to hack on `s3k`, feel free to fork and clone that instead.
-1. Edit your runtime path `~/.bashrc`/`~/.bash_profile` (or wherever makes sense
-   on your system) to include the repo's `bin` directory
+   If you'd like to hack on `s3k`, feel free to fork and then clone your fork
+   instead.
+1. Edit your runtime path (in `~/.bashrc`, `~/.bash_profile`, or wherever makes
+   sense on your system) to include the repo's `bin` directory:
    ```
    export PATH="$PATH:/path/to/s3k/bin"
    ```
@@ -80,11 +90,17 @@ you may wish to add an alias to your system:
 alias s='s3k'
 ```
 
+`s3k` has been tested predominantly on `bash` version 5.1. The script is written
+somewhat carefully such that it should be compatible with `bash` 3.2 and onward.
+If you are running a version older than 3.2 and the script works for you, please
+feel free to update this README to indicate as such. There are no plans
+currently to formally support versions older than 3.2.
+
 ### Install via package manager
 
 At this time, there is no support for installing `s3k` via package managers.
-Fortunately, it is only a single `bash` script and so can be [installed
-manually](#manual-install) with minimal fuss.
+Fortunately, it is only a single `bash` script plus an optional completion
+script, and so can be [installed manually](#manual-install) with minimal fuss.
 
 If you would like to add support for installing `s3k` via a particular package
 manager, please feel free to reach out and contribute!
@@ -107,3 +123,5 @@ commands. The developer can type in their desired regex, save it away in an
 alias, and then never think about the regex again.
 
 [`s3k`]: https://github.com/jship/s3k
+[`jq`]: https://stedolan.github.io/jq/download/
+[`stack`]: https://docs.haskellstack.org/en/stable/install_and_upgrade/
