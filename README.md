@@ -80,12 +80,16 @@ installation is pretty straightforward:
    ```
    export PATH="$PATH:/path/to/s3k/bin"
    ```
-1. Make the script executable:
+
+   _Optional_: While you're in there, you can set up `s3k` tab completion by
+   sourcing the completion script:
+   ```
+   source /path/to/s3k/completion/s3k-completion.bash
+   ```
+1. Make `s3k` executable:
    ```
    chmod +x /path/to/s3k/bin/s3k
    ```
-1. _Optional:_ Install the completion script.
-   TODO: STUB
 
 If, like the author, you find that even `s3k` is too many characters to type,
 you may wish to add an alias to your system:
@@ -96,9 +100,11 @@ alias s='s3k'
 
 `s3k` has been tested predominantly on `bash` version 5.1. The script is written
 somewhat carefully such that it should be compatible with `bash` 3.2 and onward.
-If you are running a version older than 3.2 and the script works for you, please
-feel free to update this README to indicate as such. There are no plans
-currently to formally support versions older than 3.2.
+There are no plans currently to formally support versions older than 3.2.
+
+If you use a shell other than `bash` and are familiar with your shell's
+completion facilities, please consider contributing a completion script!
+Completion is currently only available for `bash`.
 
 ### Install via package manager
 
