@@ -21,7 +21,7 @@ function usage() {
 s3k ${version} - Do more with 'stack' by typing less!
 
 USAGE
-  s3k [OPTIONS] [--] [ARGS]
+  s3k [OPTIONS] [-- [STACK_ARG...]]
 
 OPTIONS
   -p           Print the final command rather than executing it
@@ -46,6 +46,8 @@ OPTIONS
                  (this option may be specified multiple times)
   -s ALIAS     Save the final command to a project-specific alias
   -S ALIAS     Save the final command to a global alias
+  -l           List project-specific aliases
+  -L           List project-specific and global aliases
   -d ALIAS     Delete a project-specific alias
   -D ALIAS     Delete a global alias
   -e KEY=VAL   Use an environment variable in the final command
@@ -198,6 +200,8 @@ function parseArgs() {
   local _saveGlobalAlias=''
   local _deleteAlias=''
   local _deleteGlobalAlias=''
+  local _listAliases='false'
+  local _listAliasesIncludingGlobals='false'
   local _envVars=()
   local _buildWithPedanticFlag='true'
   local _arbitraryCommand=''
@@ -207,7 +211,7 @@ function parseArgs() {
   local _showUsage='false'
   local _showDetailedUsage='false'
 
-  while getopts pb:B:t:T:r:R:g:G:k:K:m:M:a:s:S:d:D:e:Wx:cCVhH _opt; do
+  while getopts pb:B:t:T:r:R:g:G:k:K:m:M:a:s:S:d:D:lLe:Wx:cCVhH _opt; do
     case "${_opt}" in
       p)
         _execute='false';;
@@ -245,6 +249,10 @@ function parseArgs() {
         _deleteAlias="${OPTARG}";;
       D)
         _deleteGlobalAlias="${OPTARG}";;
+      l)
+        _listAliases='true';;
+      L)
+        _listAliasesIncludingGlobals='true';;
       e)
         _envVars+=("${OPTARG}");;
       W)
@@ -345,6 +353,8 @@ function parseArgs() {
     --arg saveGlobalAlias "${_saveGlobalAlias}" \
     --arg deleteAlias "${_deleteAlias}" \
     --arg deleteGlobalAlias "${_deleteGlobalAlias}" \
+    --argjson listAliases "${_listAliases}" \
+    --argjson listAliasesIncludingGlobals "${_listAliasesIncludingGlobals}" \
     --argjson envVars "${_envVarsJSON}" \
     --argjson buildWithPedanticFlag "${_buildWithPedanticFlag}" \
     --arg arbitraryCommand "${_arbitraryCommand}" \
@@ -375,6 +385,8 @@ function parseArgs() {
         saveGlobalAlias: ($saveGlobalAlias | nullIfEmptyString),
         deleteAlias: ($deleteAlias | nullIfEmptyString),
         deleteGlobalAlias: ($deleteGlobalAlias | nullIfEmptyString),
+        listAliases: $listAliases,
+        listAliasesIncludingGlobals: $listAliasesIncludingGlobals,
         envVars: $envVars,
         buildWithPedanticFlag: $buildWithPedanticFlag,
         arbitraryCommand: ($arbitraryCommand | emptyArrayIfEmptyString),
@@ -650,6 +662,8 @@ function mergeAliasWithOpts() {
       saveGlobalAlias: $ARGS.positional[0].saveGlobalAlias,
       deleteAlias: $ARGS.positional[0].deleteAlias,
       deleteGlobalAlias: $ARGS.positional[0].deleteGlobalAlias,
+      listAliases: $ARGS.positional[0].listAliases,
+      listAliasesIncludingGlobals: $ARGS.positional[0].listAliasesIncludingGlobals,
       envVars: ($ARGS.positional[0].envVars + $ARGS.positional[1].envVars) | unique,
       buildWithPedanticFlag: $ARGS.positional[0].buildWithPedanticFlag,
       arbitraryCommand: ($ARGS.positional[0].arbitraryCommand + $ARGS.positional[1].arbitraryCommand),
@@ -663,8 +677,9 @@ function mergeAliasWithOpts() {
 
 function saveAlias() {
   local _jq="$1"
-  local _projRoot="$2"
-  local _opts="$3"
+  local _configFile="$2"
+  local _projRoot="$3"
+  local _opts="$4"
 
   local _aliasName=''
   _aliasName="$("${_jq}" -r '.saveAlias // empty' <<< "${_opts}")"
@@ -740,8 +755,9 @@ function saveAlias() {
 
 function deleteAlias() {
   local _jq="$1"
-  local _projRoot="$2"
-  local _opts="$3"
+  local _configFile="$2"
+  local _projRoot="$3"
+  local _opts="$4"
 
   local _aliasName=''
   _aliasName="$("${_jq}" -r '.deleteAlias // empty' <<< "${_opts}")"
@@ -771,6 +787,35 @@ function deleteAlias() {
       --arg globalAliasName "${_globalAliasName}" '
         del(.globalAliases[$globalAliasName])
       ' > "${_configFile}" < "${_tempFile}"
+  fi
+}
+
+function listAliases() {
+  local _jq="$1"
+  local _configFile="$2"
+  local _projRoot="$3"
+  local _opts="$4"
+
+  local _shouldListAliasesIncludingGlobals=''
+  _shouldListAliasesIncludingGlobals="$("${_jq}" -r '.listAliasesIncludingGlobals // empty' <<< "${_opts}")"
+
+  if [ -n "${_shouldListAliasesIncludingGlobals}" ]; then
+    "${_jq}" -r \
+      --arg projRoot "${_projRoot}" '
+        (.projects[$projRoot].aliases | keys) + (.globalAliases | keys) | .[]
+      ' < "${_configFile}" | sort -u
+    exit 0
+  fi
+
+  local _shouldListProjectAliases=''
+  _shouldListProjectAliases="$("${_jq}" -r '.listAliases // empty' <<< "${_opts}")"
+
+  if [ -n "${_shouldListProjectAliases}" ]; then
+    "${_jq}" -r \
+      --arg projRoot "${_projRoot}" '
+        .projects[$projRoot].aliases | keys | .[]
+      ' < "${_configFile}" | sort -u
+    exit 0
   fi
 }
 
@@ -1075,6 +1120,8 @@ function main() {
 
   addProjectToConfigFile "${_jq}" "${_configFile}" "${_projRoot}"
 
+  listAliases "${_jq}" "${_configFile}" "${_projRoot}" "${_opts}"
+
   local _cacheDir
   _cacheDir=$(findCacheDir "${_jq}" "${_configFile}" "${_projRoot}")
 
@@ -1087,8 +1134,8 @@ function main() {
   local _augmentedOpts=''
   _augmentedOpts="$(mergeAliasWithOpts "${_jq}" "${_opts}" "${_mergedAlias}")"
 
-  saveAlias "${_jq}" "${_projRoot}" "${_augmentedOpts}"
-  deleteAlias "${_jq}" "${_projRoot}" "${_augmentedOpts}"
+  saveAlias "${_jq}" "${_configFile}" "${_projRoot}" "${_augmentedOpts}"
+  deleteAlias "${_jq}" "${_configFile}" "${_projRoot}" "${_augmentedOpts}"
 
   processCommandList "${_jq}" "${_augmentedOpts}" "${_cacheDir}"
 }
