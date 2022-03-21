@@ -98,6 +98,23 @@ you may wish to add an alias to your system:
 alias s='s3k'
 ```
 
+If you do make an alias for `s3k` and you also want completion for your alias,
+add the following after your alias's definition:
+
+```
+complete -F __s3k_completion s
+```
+
+Here is a complete example of what your `.bashrc` might look like in regards to
+`s3k`:
+
+```
+export PATH="$PATH:/path/to/s3k/bin"
+source '/path/to/s3k/completion/s3k-completion.bash'
+alias s='s3k'
+complete -F __s3k_completion s
+```
+
 `s3k` has been tested predominantly on `bash` version 5.1. The script is written
 somewhat carefully such that it should be compatible with `bash` 3.2 and onward.
 There are no plans currently to formally support versions older than 3.2.
