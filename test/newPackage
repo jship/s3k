@@ -16,6 +16,7 @@ OPTIONS
   -n PROJ_NAME    Name of package
   -t              Include test suite
   -b              Include benchmark suite
+  -e              Include executable
   -h              Show help
 EOF
 }
@@ -45,9 +46,10 @@ function parseArgs() {
   local _projName=''
   local _includeTestSuite='false'
   local _includeBenchSuite='false'
+  local _includeExe='false'
   local _showUsage='false'
 
-  while getopts n:tbh _opt; do
+  while getopts n:tbeh _opt; do
     case "${_opt}" in
       n)
         _projName="${OPTARG}";;
@@ -55,6 +57,8 @@ function parseArgs() {
         _includeTestSuite="true";;
       b)
         _includeBenchSuite="true";;
+      e)
+        _includeExe="true";;
       h)
         _showUsage='true';;
       \?)
@@ -76,64 +80,43 @@ function parseArgs() {
       --arg projName "${_projName}" \
       --argjson includeTestSuite "${_includeTestSuite}" \
       --argjson includeBenchSuite "${_includeBenchSuite}" \
-      --argjson showUsage "${_showUsage}" '{
+      --argjson includeExe "${_includeExe}" \
+      --argjson showUsage "${_showUsage}" '
+        def baseModPath:
+          . | split("-")
+            | map(split("") | ([.[0] | ascii_upcase] + .[1:] + ["/"]))
+            | add
+            | (if .[-1] == "/" then .[0:-1] else .[] end)
+            | join("");
+
+        def baseModName:
+          . | split("-")
+            | map(split("") | ([.[0] | ascii_upcase] + .[1:] + ["."]))
+            | add
+            | (if .[-1] == "." then .[0:-1] else .[] end)
+            | join("");
+
+        def baseFunctionName:
+          . | split("-")
+            | map(split("") | ([.[0]] + .[1:] + ["_"]))
+            | add
+            | (if .[-1] == "_" then .[0:-1] else .[] end)
+            | join("");
+
+        {
           projName: $projName,
-          modulePath:
-            $projName
-              | split("-")
-              | map(split("") | ([.[0] | ascii_upcase] + .[1:] + ["/"]))
-              | add
-              | (if .[-1] == "/" then .[0:-1] else .[] end)
-              | join("")
-              | (. + ".hs"),
-          testModulePath:
-            $projName
-              | split("-")
-              | map(split("") | ([.[0] | ascii_upcase] + .[1:] + ["/"]))
-              | add
-              | (if .[-1] == "/" then .[0:-1] else .[] end)
-              | join("")
-              | ("Test/" + . + "Spec.hs"),
-          benchModulePath:
-            $projName
-              | split("-")
-              | map(split("") | ([.[0] | ascii_upcase] + .[1:] + ["/"]))
-              | add
-              | (if .[-1] == "/" then .[0:-1] else .[] end)
-              | join("")
-              | ("Bench/" + . + "Benchmarks.hs"),
-          moduleName:
-            $projName
-              | split("-")
-              | map(split("") | ([.[0] | ascii_upcase] + .[1:] + ["."]))
-              | add
-              | (if .[-1] == "." then .[0:-1] else .[] end)
-              | join(""),
-          testModuleName:
-            $projName
-              | split("-")
-              | map(split("") | ([.[0] | ascii_upcase] + .[1:] + ["."]))
-              | add
-              | (if .[-1] == "." then .[0:-1] else .[] end)
-              | join("")
-              | ("Test." + . + "Spec"),
-          benchModuleName:
-            $projName
-              | split("-")
-              | map(split("") | ([.[0] | ascii_upcase] + .[1:] + ["."]))
-              | add
-              | (if .[-1] == "." then .[0:-1] else .[] end)
-              | join("")
-              | ("Bench." + . + "Benchmarks"),
-          functionName:
-            $projName
-              | split("-")
-              | map(split("") | ([.[0]] + .[1:] + ["_"]))
-              | add
-              | (if .[-1] == "_" then .[0:-1] else .[] end)
-              | join(""),
+          modulePath: $projName | baseModPath | (. + ".hs"),
+          testModulePath: $projName | baseModPath | ("Test/" + . + "Spec.hs"),
+          benchModulePath: $projName | baseModPath | ("Bench/" + . + "Benchmarks.hs"),
+          exeModulePath: $projName | ascii_downcase | (. + "-exe.hs"),
+          moduleName: $projName | baseModName,
+          testModuleName: $projName | baseModName | ("Test." + . + "Spec"),
+          benchModuleName: $projName | baseModName | ("Bench." + . + "Benchmarks"),
+          exeModuleName: "Main",
+          functionName: $projName | baseFunctionName,
           includeTestSuite: $includeTestSuite,
           includeBenchSuite: $includeBenchSuite,
+          includeExe: $includeExe,
           showUsage: $showUsage
         }'
   fi
@@ -314,6 +297,43 @@ benchmarks:
     dependencies:
     - base
     - criterion
+    - ${_projName}
+
+EOF
+  fi
+
+  if "${_jq}" -e '.includeExe' > /dev/null <<< "${_opts}"; then
+    mkdir -p "${_packageDir}/app"
+
+    local _exeModulePath=''
+    _exeModulePath="$("${_jq}" -r '.exeModulePath' <<< "${_opts}")"
+
+    local _exeModuleName=''
+    _exeModuleName="$("${_jq}" -r '.exeModuleName' <<< "${_opts}")"
+
+    local _functionName=''
+    _functionName="$("${_jq}" -r '.functionName' <<< "${_opts}")"
+
+    mkdir -p "$(dirname "${_packageDir}/app/${_exeModulePath}")"
+    cat <<EOF > "${_packageDir}/app/${_exeModulePath}"
+{-# LANGUAGE BlockArguments #-}
+module ${_exeModuleName}
+  ( main
+  ) where
+
+import ${_moduleName} (${_functionName})
+
+main :: IO ()
+main = print ${_functionName}
+EOF
+
+    cat <<EOF >> "${_packageDir}/package.yaml"
+executables:
+  $(basename "${_exeModulePath}" ".hs"):
+    source-dirs: app
+    main: ${_exeModulePath}
+    dependencies:
+    - base
     - ${_projName}
 
 EOF

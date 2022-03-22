@@ -31,7 +31,7 @@ function oneTimeSetUp() {
 
   "${newPackageScript}" -n bar-core
   "${newPackageScript}" -n bar-api -t
-  "${newPackageScript}" -n bar-server -t -b
+  "${newPackageScript}" -n bar-server -t -b -e
   "${newPackageScript}" -n bar-client -t
 
   "${newPackageScript}" -n foo-core
@@ -39,7 +39,7 @@ function oneTimeSetUp() {
   "${newPackageScript}" -n foo-bar-baz -t -b
 
   "${newPackageScript}" -n barn -t -b
-  "${newPackageScript}" -n fubar -t -b
+  "${newPackageScript}" -n fubar -t -b -e
 
   (cd "${_monorepoDir}" && "${s3kScript}" -C)
 }
