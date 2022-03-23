@@ -55,20 +55,28 @@ possible. Please see the [Goals](#goals) section for additional detail.
 
 ## Installation
 
+### Prerequisites
+
+Ensure [`jq`][] and [`stack`][] are installed and available on your runtime
+path:
+
+```
+$ command -v jq &>/dev/null || echo "jq is not on runtime path" >&2
+$ command -v stack &>/dev/null || echo "stack is not on runtime path" >&2
+```
+
+If you prefer not having these tools on your runtime path, you may tell `s3k`
+where they are on your system via the `S3K_PATH_JQ` and `S3K_PATH_STACK`
+environment variables.
+
 ### Manual install
 
 `s3k` is a single `bash` script and an optional completion script, so
-installation is pretty straightforward:
+installation is pretty straightforward. The tl;dr: stick the `s3k` script
+somewhere on your runtime path and source the completion script.
 
-1. Ensure [`jq`][] and [`stack`][] are installed and available on your runtime
-   path:
-   ```
-   $ command -v jq &>/dev/null || echo "jq is not on runtime path" >&2
-   $ command -v stack &>/dev/null || echo "stack is not on runtime path" >&2
-   ```
-   If you prefer not having these tools on your runtime path, you may tell `s3k`
-   where they are on your system via the `S3K_PATH_JQ` and `S3K_PATH_STACK`
-   environment variables.
+In more words:
+
 1. Clone the repo:
    ```
    git clone https://github.com/jship/s3k.git
