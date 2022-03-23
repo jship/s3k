@@ -972,7 +972,7 @@ function processCommandList() {
   local _benchArgs=''
   _benchArgs=$("${_jq}" -r '.benchArgs | if . == [] then empty else join (" ") | @sh end' <<< "${_opts}")
   if [ -n "${_benchArgs}" ]; then
-    _benchCommand+=('--bench-arguments' "${_benchArgs}")
+    _benchCommand+=('--benchmark-arguments' "${_benchArgs}")
   fi
   local _benchTargets=()
   local _benchTargetRegex=()
@@ -1002,7 +1002,7 @@ function processCommandList() {
 
   local _runCommand=('stack' 'run')
   local _runArgs=''
-  _runArgs=$("${_jq}" -r '.runArgs | if . == [] then empty else join (" ") | @sh end' <<< "${_opts}")
+  _runArgs=$("${_jq}" -r '.runArgs | if . == [] then empty else join (" ") end' <<< "${_opts}")
   local _runTarget=''
   local _runTargetRegex=()
   while IFS='' read -r _line; do
