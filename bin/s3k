@@ -25,27 +25,27 @@ USAGE
 
 OPTIONS
   -p           Print the final command rather than executing it
-  -b REGEX     Select build target(s) via extended regex
+  -b REGEX     Select packages to build via extended regex
   -B REGEX     Same as '-b' but tests and benchmarks are not built
-  -t REGEX     Select test target(s) via extended regex
+  -t REGEX     Select packages to test via extended regex
   -T ARGS      Test arguments
                  (be sure to quote ARGS, e.g. -T '--match Foo')
-  -r REGEX     Select run target(s) via extended regex
+  -r REGEX     Select executables to run via extended regex
   -R ARGS      Run arguments
                  (be sure to quote ARGS, e.g. -R '-i foo.txt -o bar.txt')
   -g REGEX     Select GHCi target(s) via extended regex
   -G ARGS      GHCi options
                  (be sure to quote ARGS, e.g. -G '-Wno-missing-home-modules')
-  -k WORD      Select haddock target(s) via extended regex
+  -k WORD      Select packages to generate haddocks via extended regex
   -K ARGS      Haddock arguments
                  (be sure to quote ARGS, e.g. -K '--html --pretty-html')
-  -m REGEX     Select benchmark target(s) via extended regex
+  -m REGEX     Select packages to benchmark via extended regex
   -M ARGS      Benchmark arguments
                  (be sure to quote ARGS, e.g. -M '--match pattern Foo')
   -a ALIAS     Load a command via alias
                  (this option may be specified multiple times)
-  -s ALIAS     Save the final command to a project-specific alias
-  -S ALIAS     Save the final command to a global alias
+  -s ALIAS     Save the invocation to a project-specific alias
+  -S ALIAS     Save the invocation to a global alias
   -l           List project-specific aliases
   -L           List project-specific and global aliases
   -d ALIAS     Delete a project-specific alias
@@ -75,7 +75,7 @@ ARGS
                Considering the above warning, it is typically only useful to
                supply STACK_ARG arguments when lasering in on a specific task
                with 's3k', whether that task is building, testing, running a
-               binary, etc.
+               binary, etc or to pass args like '--stack-yaml'.
 
                If 's3k' is invoked with only STACK_ARG arguments and no options,
                then 's3k' is effectively a pass-through wrapper around 'stack'
@@ -121,28 +121,28 @@ Print invocation to build packages with names containing 'foo':
 $ s3k -b foo -p
 
 Test packages containing the whole word 'foo':
-# s3k -t '\<foo\>'
+$ s3k -t '\<foo\>'
 
 Build and then run binary named 'foo-server':
-# s3k -r 'foo-server'
+$ s3k -r 'foo-server'
 
 Run GHCi with lib targets from packages with 'foo' or 'bar' prefixes:
-# s3k -g '^(foo|bar).*:lib'
+$ s3k -g '^(foo|bar).*:lib'
 
 Alias running GHCi with lib targets from packages with 'foo' or 'bar' prefixes:
-# s3k -g '^(foo|bar).*:lib*' -s ghci-foo-bar -p
+$ s3k -g '^(foo|bar).*:lib*' -s ghci-foo-bar -p
 
 Run GHCi via the alias created in the previous example:
-# s3k -a ghci-foo-bar
+$ s3k -a ghci-foo-bar
 
 Run ghcid using the previous example's alias as input:
-# ghcid --command "$(s3k -a ghci-foo-bar -p)"
+$ ghcid --command "$(s3k -a ghci-foo-bar -p)"
 
 Save the previous command to an alias:
-# s3k -x 'ghcid --command "$(s3k -a ghci-foo-bar -p)"' -s ghcid-foo-bar -p
+$ s3k -x 'ghcid --command "$(s3k -a ghci-foo-bar -p)"' -s ghcid-foo-bar -p
 
 Run ghcid via the alias created in the previous example:
-# s3k -a ghcid-foo-bar
+$ s3k -a ghcid-foo-bar
 EOF
 }
 

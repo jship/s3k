@@ -14,6 +14,12 @@ For a thorough walkthrough of `s3k`, please see the [user guide](./GUIDE.md).
 The snippet below is a crash course on `s3k`'s usage:
 
 ```
+$ s3k -h
+# ... prints help ...
+
+$ s3k -H
+# ... prints detailed help ...
+
 $ stack ide packages --stdout
 bar-core
 bar-server
@@ -99,8 +105,8 @@ In more words:
    chmod +x /path/to/s3k/bin/s3k
    ```
 
-If, like the author, you find that even `s3k` is too many characters to type,
-you may wish to add an alias to your system:
+If you find that even `s3k` is too many characters to type, you may wish to add
+an alias to your system:
 
 ```
 alias s='s3k'
@@ -156,6 +162,11 @@ interact with some slice of a monorepo though, and `s3k` would be inhumane if it
 expected them to do so. For this reason, `s3k` heavily encourages aliasing
 commands. The developer can type in their desired regex, save it away in an
 alias, and then never think about the regex again.
+
+An ulterior goal in the creation of `s3k` was to stop maintaining something on
+the order of 50+ ad-hoc, overly-specific scripts across the projects I work on.
+This was another reason why aliasing became a core feature of `s3k`. Replacing
+piles of scripts with a single script was good for the soul.
 
 [`s3k`]: https://github.com/jship/s3k
 [`jq`]: https://stedolan.github.io/jq/download/

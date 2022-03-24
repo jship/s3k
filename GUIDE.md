@@ -62,7 +62,7 @@ We have:
 
 * Two packages that only have library targets
 * Three packages that have library and test targets
-* Two pacakges that have library, test, and benchmark targets
+* Two packages that have library, test, and benchmark targets
 * Two packages that have library, test, benchmark, and executable targets
 
 Amongst these nine packages, we have two "package suites": `bar` and `foo`. In
@@ -77,8 +77,9 @@ Let's start off by fully building the `bar` package suite without using `s3k`:
 $ stack build --test --no-run-tests --bench --no-run-benchmarks --pedantic bar-api bar-client bar-core bar-server
 ```
 
-That was quite a bit to type. Let's see if we can have `s3k` save us some
-effort:
+That was quite a bit to type. We might already be toying with the idea of
+shoving the above invocation into a script. Let's see if we can have `s3k` save
+us some effort:
 
 ```
 $ s3k -b bar -p
@@ -92,7 +93,7 @@ how valuable this flag is, as it lets us iteratively build up an `s3k`
 invocation without actually carrying out expensive `stack build` operations.
 
 Our first use of `s3k` built a few extra packages that aren't part of the `bar`
-package suite: `barn`, `foo-bar`, `foo-bar-baz`, and `fubar. Let's work towards
+package suite: `barn`, `foo-bar`, `foo-bar-baz`, and `fubar`. Let's work towards
 refining our `s3k` invocation with an extended regex:
 
 ```
@@ -120,8 +121,7 @@ can lop off the `-p` option if you'd like to go through with the build.
 The only new piece of regex we introduced was `^`, which is known as a line
 anchor.  `^` indicates that the pattern following must appear at the start of
 the line.  Under the hood, `s3k` is passing the available package targets, each
-on their own line, to a `grep -E` invocation, so we exploit this fact in our
-regex.
+on their own line, to a `grep -E` invocation. We exploit this fact in our regex.
 
 ## Build/test/haddock/benchmark/GHCi/run
 
@@ -150,8 +150,8 @@ stack run bar-server-exe
 
 The invocations containing `-t` (short for `stack test`) and `-m` (short for
 `stack bench`) are (mildly) interesting in that `s3k` takes into account whether
-or not test/bench targets exist in the first place. THat is why we don't see the
-full package suite's packages on those lines.
+or not test/bench targets exist in the first place. That is why we don't see the
+full package suite on those lines.
 
 Let's see what happens if we use a couple of these options we've seen, but in
 one shot:
@@ -224,6 +224,208 @@ stack build --test-arguments --match "Whoopsie!" bar-server && stack test --test
 The above example is a bit contrived, as we should always prefer using the `-T`
 option to `s3k` rather than specifying the raw `--test-arguments` stack
 argument, but hopefully it gets the point across that stack arguments are
-distributed to each command in the final command list.
+distributed to each command in the final command list. This functionality can be
+very useful, e.g. for options like `--resolver`, `--stack-yaml`, etc.
+
+## Environment variables
+
+We can set environment variables that are local to an `s3k` invocation` via the
+`-e` option:
+
+```
+$ s3k -r bar-server-exe -e PORT=7890 -e LOGGING=verbose -p
+( export LOGGING='verbose'; export PORT='7890'; stack run bar-server-exe )
+```
+
+`s3k` made a subshell for us where the environment variables are exported and
+then our generated command runs. The use of a subshell here makes it so that if
+our generated command is actually a list of commands (delimited by `&&`), each
+command will have the environment variables available.
+
+Note that the above example is equivalent to the following:
+
+```
+$ PORT=7890 LOGGING=verbose s3k -r bar-server-exe -p
+```
+
+However, if we choose to explicitly tell `s3k` about the environment variables
+via `-e`, then we can save these environment variables in our `s3k` aliases.
+
+## Aliasing
+
+Typing regexes any time we want to interact with our build tool doesn't exactly
+spark joy. This is where aliases come in.
+
+Before we do alias things, let's look at a couple more regex features we haven't
+seen yet:
+
+```
+$ s3k -g '^\<(foo|bar)\>.*:lib' -p
+stack ghci bar-api:lib bar-client:lib bar-core:lib bar-server:lib foo-bar-baz:lib foo-bar:lib foo-core:lib
+```
+
+A good chunk of this regex is the same: we want to do stuff with the `bar`
+package suite. But we're now using regex alternation so that we also do stuff
+with the `foo` package suite. `(foo|bar)` means "match `foo` or `bar`". The
+pattern provided to `-g` is run against all of the monorepo's _targets_ (not its
+packages), so we are careful to say "match only the library targets" via
+`.*:lib`. The `.` means "match any character" and `*` means "for the immediately
+preceding match, expect this same match 0 or more times". The `:lib`, just
+like `foo`, `bar`, etc. means "match `:lib` exactly".
+
+All of the above is to say: we want to run GHCi with the library targets of the
+`foo` and `bar` package suites.
+
+Having typed that regex the one time, I'd much prefer never typing it again.
+Let's save it to an alias with the `-s` option:
+
+```
+$ s3k -g '^\<(foo|bar)\>.*:lib' -s ghci-foo-bar -p
+stack ghci bar-api:lib bar-client:lib bar-core:lib bar-server:lib foo-bar-baz:lib foo-bar:lib foo-core:lib
+```
+
+Now we can recall this alias via the `-a` option:
+
+```
+$ s3k -a ghci-foo-bar -p
+stack ghci bar-api:lib bar-client:lib bar-core:lib bar-server:lib foo-bar-baz:lib foo-bar:lib foo-core:lib
+```
+
+The `s3k` completion script will tab-complete aliases for you, so no need to
+worry on remembering them exactly.
+
+Multiple aliases can be recalled in a single `s3k` invocation:
+
+```
+$ s3k -B '^\<foo\>' -s build-foo -p
+stack build --pedantic foo-bar foo-bar-baz foo-core
+
+$ s3k -B '^\<bar\>' -s build-bar -p
+stack build --pedantic bar-api bar-client bar-core bar-server
+
+$ s3k -t '^\<bar\>' -s test-bar -p
+stack test --pedantic bar-api bar-client bar-server
+
+$ s3k -a build-foo -a build-bar -a test-bar -p
+stack build --pedantic bar-api bar-client bar-core bar-server foo-bar foo-bar-baz foo-core && stack test --pedantic bar-api bar-client bar-server
+```
+
+Note that when an invocation is saved to an alias, `-W` is not saved with it.
+This makes combining aliases much more convenient.
+
+As we've seen, `-s` saves an alias. But there is also `-S`. The difference is
+that `-s` saves a project-specific alias, while `-S` saves a "global" alias.
+Global aliases can be useful when you want to leverage the same `s3k` invocation
+across multiple `stack` projects.
+
+We can delete project-specific aliases via `-d` and global aliases via `-D`.
+
+## Custom commands
+
+Custom commands can be run via the `-x` option:
+
+```
+$ s3k -x 'ls -l' -p
+ls -l
+```
+
+This is particularly useful to invoke `ghcid`:
+
+```
+$ s3k -x 'ghcid --command "$(s3k -a ghci-foo-bar -p)"' -p
+ghcid --command "$(s3k -a ghci-foo-bar -p)"
+```
+
+In the above invocation, we've defined our custom command such that if we were
+to execute it (by removing the trailing `-p`), `s3k` calls itself to populate
+`ghcid`'s `--command` option by loading the `ghci-foo-bar` alias.
+
+Note that the quoting is critical: we wrap the whole custom command in
+single-quotes, not unlike how we've been writing our regexes in single-quotes.
+With the whole custom command in single-quotes, the inner `s3k` invocation will
+not be expanded by our shell, so our outer `s3k` invocation will receive the
+text exactly as we've written it (`ghcid --command "$(s3k -a ghci-foo-bar -p)"`)
+rather than the expansion (`stack ghci bar-api:lib bar-client:lib ...`).
+
+It's likely unsurprising at this point, but we can capture the above command in
+its own alias:
+
+```
+$ s3k -x 'ghcid --command "$(s3k -a ghci-foo-bar -p)"' -s ghcid-foo-bar -p
+ghcid --command "$(s3k -a ghci-foo-bar -p)"
+
+$ s3k -a ghcid-foo-bar -p
+ghcid --command "$(s3k -a ghci-foo-bar -p)"
+```
+
+Now we can freely update our `ghci-foo-bar` alias as needed, and we
+automatically get those updates when using our `ghcid-foo-bar` alias because the
+`ghcid` alias is defined in terms of the `ghci` alias.
+
+**Caution:** If you typically invoke `s3k` via a system alias, do not use the
+system alias in "embedded" `s3k` invocations. For example, if you have `s` as a
+system alias for `s3k`:
+
+```
+# Right
+$ s -x 'ghcid --command "$(s3k -a ghci-foo-bar -p)"' -s ghcid-foo-bar -p
+ghcid --command "$(s3k -a ghci-foo-bar -p)"
+
+# Wrong
+$ s -x 'ghcid --command "$(s -a ghci-foo-bar -p)"' -s ghcid-foo-bar -p
+```
+
+If `-x` is present along with any other command-generating option (`-b`, `-B`,
+`-t`, `-k`, and `-m`), then the custom command will be run at the end of the
+command list:
+
+```
+$ s3k -a build-bar -x 'open https://youtu.be/dQw4w9WgXcQ' -p
+stack build --pedantic bar-api bar-client bar-core bar-server && open https://youtu.be/dQw4w9WgXcQ
+```
+
+This can be useful if you'd like to do some cleanup (e.g. deleting `hspec`
+files), be alerted when a build is done, etc.
+
+Our custom command can itself be a command list, pipeline, etc.:
+
+```
+$ s3k -x 'find . -name package.yaml -type f -print | wc -l' -p
+find . -name package.yaml -type f -print | wc -l
+```
+
+## Config file
+
+Considering `s3k` supports saving aliases, these aliases have to be saved
+somewhere. They are saved to `s3k`'s config file. By default, this config file
+will be at `${XDG_CONFIG_HOME}/s3k/config.json` if the `XDG_CONFIG_HOME`
+environment variable is populated. Otherwise, the config file will be at
+`"${HOME}/.s3k/config.json"`. The user is free to override the directory in
+which `s3k` will write its config file via the `S3K_CONFIG_HOME` environment
+variable.
+
+If you'd like to view or update the config file manually, you can get the file
+path via `s3k -c`. In general, you should opt for `s3k` itself to be the sole
+editor of the config file, but as long as you're careful, edit away!
+
+## Caching
+
+If the monorepo we're working on is big enough, `stack ide packages` and `stack
+ide targets` are noticeably slow commands. The output from these commands
+underpin most operations with `s3k`, so `s3k` does project-specific caching of
+the output from these commands. The cache for a project will be automatically
+generated if not present.
+
+We can tell `s3k` to regenerate a project's cache via running `s3k -C` from any
+directory at or under our `stack` project. You should only need to run this
+command when packages are added to or deleted from your monorepo.
+
+## End
+
+If you've made it this far, you know just about everything there is to know
+about using `s3k`. If start using the tool and have any feedback, please feel
+free to reach out on Github.
+
+Now go forth and type less!
 
 [`s3k` User Guide]: https://github.com/jship/s3k/blob/main/GUIDE.md
