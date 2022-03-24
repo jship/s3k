@@ -134,25 +134,25 @@ function testTheThings() {
     'stack run bar-server-exe -- --do-stuff --do-other-stuff' \
     "$(s3k -r 'bar-server-exe' -R '--do-stuff --do-other-stuff' -p)"
 
-#  assertEquals \
-#    '17' \
-#    'stack build --pedantic --dry-run bar-api bar-client bar-core bar-server' \
-#    "$(s3k -b '^\<bar\>' -p -- --dry-run)"
+  assertEquals \
+    '17' \
+    'stack build --pedantic --dry-run bar-api bar-client bar-core bar-server' \
+    "$(s3k -B '^\<bar\>' -p -- --dry-run)"
 
   assertEquals \
     '18' \
     'stack build --pedantic --dry-run bar-api bar-client bar-core bar-server' \
     "$(s3k -p -- build --pedantic --dry-run bar-api bar-client bar-core bar-server)"
 
-#  assertEquals \
-#    '19' \
-#    'stack build --test-arguments --match "Whoopsie!" bar-server && stack test --test-arguments --match "Whoopsie!" bar-server' \
-#    "$(s3k -B 'bar-server' -t 'bar-server' -W -p -- --test-arguments '--match "Whoopsie!"')"
+  assertEquals \
+    '19' \
+    'stack build --test-arguments --match "Whoopsie!" bar-server && stack test --test-arguments --match "Whoopsie!" bar-server' \
+    "$(s3k -B 'bar-server' -t 'bar-server' -W -p -- --test-arguments '--match "Whoopsie!"')"
 
-#  assertEquals \
-#    '20' \
-#    '( export LOGGING='verbose'; export PORT='7890'; stack run bar-server-exe )' \
-#    "$(s3k -r bar-server-exe -e PORT=7890 -e LOGGING=verbose -p)"
+  assertEquals \
+    '20' \
+    '( export LOGGING='"'"'verbose'"'"'; export PORT='"'"'7890'"'"'; stack run bar-server-exe )' \
+    "$(s3k -r bar-server-exe -e PORT=7890 -e LOGGING=verbose -p)"
 
   assertEquals \
     '21' \
@@ -209,18 +209,13 @@ function testTheThings() {
     'ghcid --command "$(s3k -a ghci-foo-bar -p)"' \
     "$(s3k -a ghcid-foo-bar -p)"
 
-#  assertEquals \
-#    '32' \
-#    'ghcid --command "$(s3k -a ghci-foo-bar -p)"' \
-#    's -x 'ghcid --command "$(s3k -a ghci-foo-bar -p)"' -s ghcid-foo-bar -p'
-
-#  assertEquals \
-#    '33' \
-#    'stack build --pedantic bar-api bar-client bar-core bar-server && open https://youtu.be/dQw4w9WgXcQ' \
-#    "$(s3k -a build-bar -x 'open https://youtu.be/dQw4w9WgXcQ' -p)"
+  assertEquals \
+    '32' \
+    'stack build --pedantic bar-api bar-client bar-core bar-server && open https://youtu.be/dQw4w9WgXcQ' \
+    "$(s3k -a build-bar -x 'open https://youtu.be/dQw4w9WgXcQ' -p)"
 
   assertEquals \
-    '34' \
+    '33' \
     'find . -name package.yaml -type f -print | wc -l' \
     "$(s3k -x 'find . -name package.yaml -type f -print | wc -l' -p)"
 }

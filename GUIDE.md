@@ -199,7 +199,7 @@ We can also pass raw `stack` arguments by delimiting `s3k`'s options and
 `stack`'s arguments with `--`:
 
 ```
-$ s3k -b '^\<bar\>' -p -- --dry-run
+$ s3k -B '^\<bar\>' -p -- --dry-run
 stack build --pedantic --dry-run bar-api bar-client bar-core bar-server
 ```
 
