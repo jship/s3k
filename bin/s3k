@@ -14,7 +14,7 @@ function removeTempDir() {
 }
 trap removeTempDir EXIT
 
-declare -r version='0.0.0'
+declare -r version='0.0.1'
 
 function usage() {
   cat <<EOF
