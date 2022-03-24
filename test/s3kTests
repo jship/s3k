@@ -4,6 +4,15 @@ set -o errexit
 set -o pipefail
 [[ "${DEBUG}" == 'true' ]] && set -o xtrace
 
+declare -g s3kScript=''
+s3kScript="$(git rev-parse --show-toplevel)/bin/s3k"
+if [ ! -s "${s3kScript}" ]; then
+  echo "No file exists at \"${s3kScript}\" path" >&2
+  exit 1
+fi
+
+export PATH="${s3kScript}:${PATH}"
+
 declare -g tempDir=''
 tempDir="$(mktemp -d)"
 function removeTempDir() {
@@ -14,16 +23,10 @@ function removeTempDir() {
 trap removeTempDir EXIT
 
 function oneTimeSetUp() {
-  declare -g s3kScript=''
-  s3kScript="$(git rev-parse --show-toplevel)/bin/s3k"
-  if [ ! -s "${s3kScript}" ]; then
-    fail "No file exists at \"${s3kScript}\" path" >&2
-  fi
-
   declare -g newPackageScript=''
   newPackageScript="$(git rev-parse --show-toplevel)/test/newPackage"
   if [ ! -s "${newPackageScript}" ]; then
-    fail "No file exists at \"${newPackageScript}\" path" >&2
+    fail "No file exists at \"${newPackageScript}\" path"
   fi
 
   declare -g _monorepoDir=''
@@ -41,7 +44,7 @@ function oneTimeSetUp() {
   "${newPackageScript}" -n barn -t -b
   "${newPackageScript}" -n fubar -t -b -e
 
-  (cd "${_monorepoDir}" && "${s3kScript}" -C)
+  (cd "${_monorepoDir}" && s3k -C)
 }
 
 function oneTimeTearDown() {
@@ -54,157 +57,157 @@ function testTheThings() {
   assertEquals \
     '1' \
     'stack build --test --no-run-tests --bench --no-run-benchmarks --pedantic bar-api bar-client bar-core bar-server barn foo-bar foo-bar-baz fubar' \
-    "$("${s3kScript}" -b bar -p)"
+    "$(s3k -b bar -p)"
 
   assertEquals \
     '2' \
     'stack build --test --no-run-tests --bench --no-run-benchmarks --pedantic bar-api bar-client bar-core bar-server foo-bar foo-bar-baz' \
-    "$("${s3kScript}" -b '\<bar\>' -p)"
+    "$(s3k -b '\<bar\>' -p)"
 
   assertEquals \
     '3' \
     'stack build --test --no-run-tests --bench --no-run-benchmarks --pedantic bar-api bar-client bar-core bar-server' \
-    "$("${s3kScript}" -b '^\<bar\>' -p)"
+    "$(s3k -b '^\<bar\>' -p)"
 
   assertEquals \
     '4' \
     'stack build --pedantic bar-api bar-client bar-core bar-server' \
-    "$("${s3kScript}" -B '^\<bar\>' -p)"
+    "$(s3k -B '^\<bar\>' -p)"
 
   assertEquals \
     '5' \
     'stack test --pedantic bar-api bar-client bar-server' \
-    "$("${s3kScript}" -t '^\<bar\>' -p)"
+    "$(s3k -t '^\<bar\>' -p)"
 
   assertEquals \
     '6' \
     'stack haddock --pedantic bar-api bar-client bar-core bar-server' \
-    "$("${s3kScript}" -k '^\<bar\>' -p)"
+    "$(s3k -k '^\<bar\>' -p)"
 
   assertEquals \
     '7' \
     'stack bench --pedantic bar-server' \
-    "$("${s3kScript}" -m '^\<bar\>' -p)"
+    "$(s3k -m '^\<bar\>' -p)"
 
   assertEquals \
     '8' \
     'stack ghci bar-api:lib bar-api:test:bar-api-test-suite bar-client:lib bar-client:test:bar-client-test-suite bar-core:lib bar-server:bench:bar-server-bench-suite bar-server:exe:bar-server-exe bar-server:lib bar-server:test:bar-server-test-suite' \
-    "$("${s3kScript}" -g '^\<bar\>' -p)"
+    "$(s3k -g '^\<bar\>' -p)"
 
   assertEquals \
     '9' \
     'stack run bar-server-exe' \
-    "$("${s3kScript}" -r '^\<bar\>' -p)"
+    "$(s3k -r '^\<bar\>' -p)"
 
   assertEquals \
     '10' \
     'stack build --pedantic bar-api bar-client bar-core bar-server && stack test --pedantic bar-api bar-client bar-server' \
-    "$("${s3kScript}" -B '^\<bar\>' -t '^\<bar\>' -p)"
+    "$(s3k -B '^\<bar\>' -t '^\<bar\>' -p)"
 
   assertEquals \
     '11' \
     'stack build bar-api bar-client bar-core bar-server && stack test bar-api bar-client bar-server' \
-    "$("${s3kScript}" -B '^\<bar\>' -t '^\<bar\>' -p -W)"
+    "$(s3k -B '^\<bar\>' -t '^\<bar\>' -p -W)"
 
-#  assertEquals \
-#    '12' \
-#    'stack test --pedantic --test-arguments '--match "Bar.Server"' bar-server' \
-#    "$("${s3kScript}" -t 'bar-server' -T '--match "Bar.Server"' -p)"
+  assertEquals \
+    '12' \
+    'stack test --pedantic --test-arguments '"'"'--match "Bar.Server"'"'"' bar-server' \
+    "$(s3k -t 'bar-server' -T '--match "Bar.Server"' -p)"
 
-#  assertEquals \
-#    '13' \
-#    'stack haddock --pedantic --haddock-arguments '--html --pretty-html' bar-server' \
-#    "$("${s3kScript}" -k 'bar-server' -K '--html --pretty-html' -p)"
+  assertEquals \
+    '13' \
+    'stack haddock --pedantic --haddock-arguments '"'"'--html --pretty-html'"'"' bar-server' \
+    "$(s3k -k 'bar-server' -K '--html --pretty-html' -p)"
 
-#  assertEquals \
-#    '14' \
-#    'stack bench --pedantic --benchmark-arguments '--match pattern "bar_server"' bar-server' \
-#    "$("${s3kScript}" -m 'bar-server' -M '--match pattern "bar_server"' -p)"
+  assertEquals \
+    '14' \
+    'stack bench --pedantic --benchmark-arguments '"'"'--match pattern "bar_server"'"'"' bar-server' \
+    "$(s3k -m 'bar-server' -M '--match pattern "bar_server"' -p)"
 
   assertEquals \
     '15' \
     "stack ghci --ghci-options '-cpp' bar-server:lib" \
-    "$("${s3kScript}" -g 'bar-server:lib' -G '-cpp' -p)"
+    "$(s3k -g 'bar-server:lib' -G '-cpp' -p)"
 
   assertEquals \
     '16' \
     'stack run bar-server-exe -- --do-stuff --do-other-stuff' \
-    "$("${s3kScript}" -r 'bar-server-exe' -R '--do-stuff --do-other-stuff' -p)"
+    "$(s3k -r 'bar-server-exe' -R '--do-stuff --do-other-stuff' -p)"
 
 #  assertEquals \
 #    '17' \
 #    'stack build --pedantic --dry-run bar-api bar-client bar-core bar-server' \
-#    "$("${s3kScript}" -b '^\<bar\>' -p -- --dry-run)"
+#    "$(s3k -b '^\<bar\>' -p -- --dry-run)"
 
   assertEquals \
     '18' \
     'stack build --pedantic --dry-run bar-api bar-client bar-core bar-server' \
-    "$("${s3kScript}" -p -- build --pedantic --dry-run bar-api bar-client bar-core bar-server)"
+    "$(s3k -p -- build --pedantic --dry-run bar-api bar-client bar-core bar-server)"
 
 #  assertEquals \
 #    '19' \
 #    'stack build --test-arguments --match "Whoopsie!" bar-server && stack test --test-arguments --match "Whoopsie!" bar-server' \
-#    "$("${s3kScript}" -B 'bar-server' -t 'bar-server' -W -p -- --test-arguments '--match "Whoopsie!"')"
+#    "$(s3k -B 'bar-server' -t 'bar-server' -W -p -- --test-arguments '--match "Whoopsie!"')"
 
 #  assertEquals \
 #    '20' \
 #    '( export LOGGING='verbose'; export PORT='7890'; stack run bar-server-exe )' \
-#    "$("${s3kScript}" -r bar-server-exe -e PORT=7890 -e LOGGING=verbose -p)"
+#    "$(s3k -r bar-server-exe -e PORT=7890 -e LOGGING=verbose -p)"
 
   assertEquals \
     '21' \
     'stack ghci bar-api:lib bar-client:lib bar-core:lib bar-server:lib foo-bar-baz:lib foo-bar:lib foo-core:lib' \
-    "$("${s3kScript}" -g '^\<(foo|bar)\>.*:lib' -p)"
+    "$(s3k -g '^\<(foo|bar)\>.*:lib' -p)"
 
   assertEquals \
     '22' \
     'stack ghci bar-api:lib bar-client:lib bar-core:lib bar-server:lib foo-bar-baz:lib foo-bar:lib foo-core:lib' \
-    "$("${s3kScript}" -g '^\<(foo|bar)\>.*:lib' -s ghci-foo-bar -p)"
+    "$(s3k -g '^\<(foo|bar)\>.*:lib' -s ghci-foo-bar -p)"
 
   assertEquals \
     '23' \
     'stack ghci bar-api:lib bar-client:lib bar-core:lib bar-server:lib foo-bar-baz:lib foo-bar:lib foo-core:lib' \
-    "$("${s3kScript}" -a ghci-foo-bar -p)"
+    "$(s3k -a ghci-foo-bar -p)"
 
   assertEquals \
     '24' \
     'stack build --pedantic foo-bar foo-bar-baz foo-core' \
-    "$("${s3kScript}" -B '^\<foo\>' -s build-foo -p)"
+    "$(s3k -B '^\<foo\>' -s build-foo -p)"
 
   assertEquals \
     '25' \
     'stack build --pedantic bar-api bar-client bar-core bar-server' \
-    "$("${s3kScript}" -B '^\<bar\>' -s build-bar -p)"
+    "$(s3k -B '^\<bar\>' -s build-bar -p)"
 
   assertEquals \
     '26' \
     'stack test --pedantic bar-api bar-client bar-server' \
-    "$("${s3kScript}" -t '^\<bar\>' -s test-bar -p)"
+    "$(s3k -t '^\<bar\>' -s test-bar -p)"
 
   assertEquals \
     '27' \
     'stack build --pedantic bar-api bar-client bar-core bar-server foo-bar foo-bar-baz foo-core && stack test --pedantic bar-api bar-client bar-server' \
-    "$("${s3kScript}" -a build-foo -a build-bar -a test-bar -p)"
+    "$(s3k -a build-foo -a build-bar -a test-bar -p)"
 
   assertEquals \
     '28' \
     'ls -l' \
-    "$("${s3kScript}" -x 'ls -l' -p)"
+    "$(s3k -x 'ls -l' -p)"
 
   assertEquals \
     '29' \
     'ghcid --command "$(s3k -a ghci-foo-bar -p)"' \
-    "$("${s3kScript}" -x 'ghcid --command "$(s3k -a ghci-foo-bar -p)"' -p)"
+    "$(s3k -x 'ghcid --command "$(s3k -a ghci-foo-bar -p)"' -p)"
 
   assertEquals \
     '30' \
     'ghcid --command "$(s3k -a ghci-foo-bar -p)"' \
-    "$("${s3kScript}" -x 'ghcid --command "$(s3k -a ghci-foo-bar -p)"' -s ghcid-foo-bar -p)"
+    "$(s3k -x 'ghcid --command "$(s3k -a ghci-foo-bar -p)"' -s ghcid-foo-bar -p)"
 
   assertEquals \
     '31' \
     'ghcid --command "$(s3k -a ghci-foo-bar -p)"' \
-    "$("${s3kScript}" -a ghcid-foo-bar -p)"
+    "$(s3k -a ghcid-foo-bar -p)"
 
 #  assertEquals \
 #    '32' \
@@ -214,12 +217,12 @@ function testTheThings() {
 #  assertEquals \
 #    '33' \
 #    'stack build --pedantic bar-api bar-client bar-core bar-server && open https://youtu.be/dQw4w9WgXcQ' \
-#    "$("${s3kScript}" -a build-bar -x 'open https://youtu.be/dQw4w9WgXcQ' -p)"
+#    "$(s3k -a build-bar -x 'open https://youtu.be/dQw4w9WgXcQ' -p)"
 
   assertEquals \
     '34' \
     'find . -name package.yaml -type f -print | wc -l' \
-    "$("${s3kScript}" -x 'find . -name package.yaml -type f -print | wc -l' -p)"
+    "$(s3k -x 'find . -name package.yaml -type f -print | wc -l' -p)"
 }
 
 function usage() {
