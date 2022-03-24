@@ -48,159 +48,178 @@ function oneTimeTearDown() {
   true #rm -r "${_monorepoDir}"
 }
 
-function testFullBuildOnly() {
+function testTheThings() {
   cd "${_monorepoDir}"
 
   assertEquals \
-    "full build - regex 'bar' w/ pedantic:" \
+    '1' \
     'stack build --test --no-run-tests --bench --no-run-benchmarks --pedantic bar-api bar-client bar-core bar-server barn foo-bar foo-bar-baz fubar' \
-    "$("${s3kScript}" -p -b 'bar')"
+    "$("${s3kScript}" -b bar -p)"
 
   assertEquals \
-    "full build - regex '^bar' w/ pedantic:" \
-    'stack build --test --no-run-tests --bench --no-run-benchmarks --pedantic bar-api bar-client bar-core bar-server barn' \
-    "$("${s3kScript}" -p -b '^bar')"
+    '2' \
+    'stack build --test --no-run-tests --bench --no-run-benchmarks --pedantic bar-api bar-client bar-core bar-server foo-bar foo-bar-baz' \
+    "$("${s3kScript}" -b '\<bar\>' -p)"
 
   assertEquals \
-    "full build - regex '^bar-.*' w/ pedantic:" \
+    '3' \
     'stack build --test --no-run-tests --bench --no-run-benchmarks --pedantic bar-api bar-client bar-core bar-server' \
-    "$("${s3kScript}" -p -b '^bar-.*')"
+    "$("${s3kScript}" -b '^\<bar\>' -p)"
 
   assertEquals \
-    "full build - regex 'bar-server|fubar' w/ pedantic:" \
-    'stack build --test --no-run-tests --bench --no-run-benchmarks --pedantic bar-server fubar' \
-    "$("${s3kScript}" -p -b 'bar-server|fubar')"
-
-  assertEquals \
-    "full build - regex 'bar' w/o pedantic:" \
-    'stack build --test --no-run-tests --bench --no-run-benchmarks bar-api bar-client bar-core bar-server barn foo-bar foo-bar-baz fubar' \
-    "$("${s3kScript}" -p -W -b 'bar')"
-
-  assertEquals \
-    "full build - regex '^bar' w/o pedantic:" \
-    'stack build --test --no-run-tests --bench --no-run-benchmarks bar-api bar-client bar-core bar-server barn' \
-    "$("${s3kScript}" -p -W -b '^bar')"
-
-  assertEquals \
-    "full build - regex '^bar-.*' w/o pedantic:" \
-    'stack build --test --no-run-tests --bench --no-run-benchmarks bar-api bar-client bar-core bar-server' \
-    "$("${s3kScript}" -p -W -b '^bar-.*')"
-
-  assertEquals \
-    "full build - regex 'bar-server|fubar' w/o pedantic:" \
-    'stack build --test --no-run-tests --bench --no-run-benchmarks bar-server fubar' \
-    "$("${s3kScript}" -p -W -b 'bar-server|fubar')"
-}
-
-function testBuildOnly() {
-  cd "${_monorepoDir}"
-
-  assertEquals \
-    "build - regex 'bar' w/ pedantic:" \
-    'stack build --pedantic bar-api bar-client bar-core bar-server barn foo-bar foo-bar-baz fubar' \
-    "$("${s3kScript}" -p -B 'bar')"
-
-  assertEquals \
-    "build - regex '^bar' w/ pedantic:" \
-    'stack build --pedantic bar-api bar-client bar-core bar-server barn' \
-    "$("${s3kScript}" -p -B '^bar')"
-
-  assertEquals \
-    "build - regex '^bar-.*' w/ pedantic:" \
+    '4' \
     'stack build --pedantic bar-api bar-client bar-core bar-server' \
-    "$("${s3kScript}" -p -B '^bar-.*')"
+    "$("${s3kScript}" -B '^\<bar\>' -p)"
 
   assertEquals \
-    "build - regex 'bar-server|fubar' w/ pedantic:" \
-    'stack build --pedantic bar-server fubar' \
-    "$("${s3kScript}" -p -B 'bar-server|fubar')"
-
-  assertEquals \
-    "build - regex "bar" w/o pedantic:" \
-    'stack build bar-api bar-client bar-core bar-server barn foo-bar foo-bar-baz fubar' \
-    "$("${s3kScript}" -p -W -B 'bar')"
-
-  assertEquals \
-    "build - regex '^bar' w/o pedantic:" \
-    'stack build bar-api bar-client bar-core bar-server barn' \
-    "$("${s3kScript}" -p -W -B '^bar')"
-
-  assertEquals \
-    "build - regex '^bar-.*' w/o pedantic:" \
-    'stack build bar-api bar-client bar-core bar-server' \
-    "$("${s3kScript}" -p -W -B '^bar-.*')"
-
-  assertEquals \
-    "build - regex 'bar-server|fubar' w/o pedantic:" \
-    'stack build bar-server fubar' \
-    "$("${s3kScript}" -p -W -B 'bar-server|fubar')"
-}
-
-function testTestOnly() {
-  cd "${_monorepoDir}"
-
-  assertEquals \
-    "test - regex 'bar' w/ pedantic:" \
-    'stack test --pedantic bar-api bar-client bar-server barn foo-bar foo-bar-baz fubar' \
-    "$("${s3kScript}" -p -t 'bar')"
-
-  assertEquals \
-    "test - regex '^bar' w/ pedantic:" \
-    'stack test --pedantic bar-api bar-client bar-server barn' \
-    "$("${s3kScript}" -p -t '^bar')"
-
-  assertEquals \
-    "test - regex '^bar-.*' w/ pedantic:" \
+    '5' \
     'stack test --pedantic bar-api bar-client bar-server' \
-    "$("${s3kScript}" -p -t '^bar-.*')"
+    "$("${s3kScript}" -t '^\<bar\>' -p)"
 
   assertEquals \
-    "test - regex 'bar-server|fubar' w/ pedantic:" \
-    'stack test --pedantic bar-server fubar' \
-    "$("${s3kScript}" -p -t 'bar-server|fubar')"
+    '6' \
+    'stack haddock --pedantic bar-api bar-client bar-core bar-server' \
+    "$("${s3kScript}" -k '^\<bar\>' -p)"
 
   assertEquals \
-    "test - regex 'bar' w/o pedantic:" \
-    'stack test bar-api bar-client bar-server barn foo-bar foo-bar-baz fubar' \
-    "$("${s3kScript}" -p -W -t 'bar')"
+    '7' \
+    'stack bench --pedantic bar-server' \
+    "$("${s3kScript}" -m '^\<bar\>' -p)"
 
   assertEquals \
-    "test - regex '^bar' w/o pedantic:" \
-    'stack test bar-api bar-client bar-server barn' \
-    "$("${s3kScript}" -p -W -t '^bar')"
+    '8' \
+    'stack ghci bar-api:lib bar-api:test:bar-api-test-suite bar-client:lib bar-client:test:bar-client-test-suite bar-core:lib bar-server:bench:bar-server-bench-suite bar-server:exe:bar-server-exe bar-server:lib bar-server:test:bar-server-test-suite' \
+    "$("${s3kScript}" -g '^\<bar\>' -p)"
 
   assertEquals \
-    "test - regex '^bar-.*' w/o pedantic:" \
-    'stack test bar-api bar-client bar-server' \
-    "$("${s3kScript}" -p -W -t '^bar-.*')"
+    '9' \
+    'stack run bar-server-exe' \
+    "$("${s3kScript}" -r '^\<bar\>' -p)"
 
   assertEquals \
-    "test - regex 'bar-server|fubar' w/o pedantic:" \
-    'stack test bar-server fubar' \
-    "$("${s3kScript}" -p -W -t 'bar-server|fubar')"
-}
-
-function testRunOnly() {
-  true # TODO: Implement me!
-}
-
-function testGhciOnly() {
-  cd "${_monorepoDir}"
+    '10' \
+    'stack build --pedantic bar-api bar-client bar-core bar-server && stack test --pedantic bar-api bar-client bar-server' \
+    "$("${s3kScript}" -B '^\<bar\>' -t '^\<bar\>' -p)"
 
   assertEquals \
-    "ghci - regex 'bar-api|bar-client':" \
-    'stack ghci bar-api:lib bar-api:test:bar-api-test-suite bar-client:lib bar-client:test:bar-client-test-suite' \
-    "$("${s3kScript}" -p -g 'bar-api|bar-client')"
+    '11' \
+    'stack build bar-api bar-client bar-core bar-server && stack test bar-api bar-client bar-server' \
+    "$("${s3kScript}" -B '^\<bar\>' -t '^\<bar\>' -p -W)"
+
+#  assertEquals \
+#    '12' \
+#    'stack test --pedantic --test-arguments '--match "Bar.Server"' bar-server' \
+#    "$("${s3kScript}" -t 'bar-server' -T '--match "Bar.Server"' -p)"
+
+#  assertEquals \
+#    '13' \
+#    'stack haddock --pedantic --haddock-arguments '--html --pretty-html' bar-server' \
+#    "$("${s3kScript}" -k 'bar-server' -K '--html --pretty-html' -p)"
+
+#  assertEquals \
+#    '14' \
+#    'stack bench --pedantic --benchmark-arguments '--match pattern "bar_server"' bar-server' \
+#    "$("${s3kScript}" -m 'bar-server' -M '--match pattern "bar_server"' -p)"
 
   assertEquals \
-    "ghci - regex 'bar-api|bar-client:lib':" \
-    'stack ghci bar-api:lib bar-api:test:bar-api-test-suite bar-client:lib' \
-    "$("${s3kScript}" -p -g 'bar-api|bar-client:lib')"
+    '15' \
+    "stack ghci --ghci-options '-cpp' bar-server:lib" \
+    "$("${s3kScript}" -g 'bar-server:lib' -G '-cpp' -p)"
 
   assertEquals \
-    "ghci - regex 'bar-api|bar-client:lib, pedantic flag has no effect':" \
-    'stack ghci bar-api:lib bar-api:test:bar-api-test-suite bar-client:lib' \
-    "$("${s3kScript}" -p -W -g 'bar-api|bar-client:lib')"
+    '16' \
+    'stack run bar-server-exe -- --do-stuff --do-other-stuff' \
+    "$("${s3kScript}" -r 'bar-server-exe' -R '--do-stuff --do-other-stuff' -p)"
+
+#  assertEquals \
+#    '17' \
+#    'stack build --pedantic --dry-run bar-api bar-client bar-core bar-server' \
+#    "$("${s3kScript}" -b '^\<bar\>' -p -- --dry-run)"
+
+  assertEquals \
+    '18' \
+    'stack build --pedantic --dry-run bar-api bar-client bar-core bar-server' \
+    "$("${s3kScript}" -p -- build --pedantic --dry-run bar-api bar-client bar-core bar-server)"
+
+#  assertEquals \
+#    '19' \
+#    'stack build --test-arguments --match "Whoopsie!" bar-server && stack test --test-arguments --match "Whoopsie!" bar-server' \
+#    "$("${s3kScript}" -B 'bar-server' -t 'bar-server' -W -p -- --test-arguments '--match "Whoopsie!"')"
+
+#  assertEquals \
+#    '20' \
+#    '( export LOGGING='verbose'; export PORT='7890'; stack run bar-server-exe )' \
+#    "$("${s3kScript}" -r bar-server-exe -e PORT=7890 -e LOGGING=verbose -p)"
+
+  assertEquals \
+    '21' \
+    'stack ghci bar-api:lib bar-client:lib bar-core:lib bar-server:lib foo-bar-baz:lib foo-bar:lib foo-core:lib' \
+    "$("${s3kScript}" -g '^\<(foo|bar)\>.*:lib' -p)"
+
+  assertEquals \
+    '22' \
+    'stack ghci bar-api:lib bar-client:lib bar-core:lib bar-server:lib foo-bar-baz:lib foo-bar:lib foo-core:lib' \
+    "$("${s3kScript}" -g '^\<(foo|bar)\>.*:lib' -s ghci-foo-bar -p)"
+
+  assertEquals \
+    '23' \
+    'stack ghci bar-api:lib bar-client:lib bar-core:lib bar-server:lib foo-bar-baz:lib foo-bar:lib foo-core:lib' \
+    "$("${s3kScript}" -a ghci-foo-bar -p)"
+
+  assertEquals \
+    '24' \
+    'stack build --pedantic foo-bar foo-bar-baz foo-core' \
+    "$("${s3kScript}" -B '^\<foo\>' -s build-foo -p)"
+
+  assertEquals \
+    '25' \
+    'stack build --pedantic bar-api bar-client bar-core bar-server' \
+    "$("${s3kScript}" -B '^\<bar\>' -s build-bar -p)"
+
+  assertEquals \
+    '26' \
+    'stack test --pedantic bar-api bar-client bar-server' \
+    "$("${s3kScript}" -t '^\<bar\>' -s test-bar -p)"
+
+  assertEquals \
+    '27' \
+    'stack build --pedantic bar-api bar-client bar-core bar-server foo-bar foo-bar-baz foo-core && stack test --pedantic bar-api bar-client bar-server' \
+    "$("${s3kScript}" -a build-foo -a build-bar -a test-bar -p)"
+
+  assertEquals \
+    '28' \
+    'ls -l' \
+    "$("${s3kScript}" -x 'ls -l' -p)"
+
+  assertEquals \
+    '29' \
+    'ghcid --command "$(s3k -a ghci-foo-bar -p)"' \
+    "$("${s3kScript}" -x 'ghcid --command "$(s3k -a ghci-foo-bar -p)"' -p)"
+
+  assertEquals \
+    '30' \
+    'ghcid --command "$(s3k -a ghci-foo-bar -p)"' \
+    "$("${s3kScript}" -x 'ghcid --command "$(s3k -a ghci-foo-bar -p)"' -s ghcid-foo-bar -p)"
+
+  assertEquals \
+    '31' \
+    'ghcid --command "$(s3k -a ghci-foo-bar -p)"' \
+    "$("${s3kScript}" -a ghcid-foo-bar -p)"
+
+#  assertEquals \
+#    '32' \
+#    'ghcid --command "$(s3k -a ghci-foo-bar -p)"' \
+#    's -x 'ghcid --command "$(s3k -a ghci-foo-bar -p)"' -s ghcid-foo-bar -p'
+
+#  assertEquals \
+#    '33' \
+#    'stack build --pedantic bar-api bar-client bar-core bar-server && open https://youtu.be/dQw4w9WgXcQ' \
+#    "$("${s3kScript}" -a build-bar -x 'open https://youtu.be/dQw4w9WgXcQ' -p)"
+
+  assertEquals \
+    '34' \
+    'find . -name package.yaml -type f -print | wc -l' \
+    "$("${s3kScript}" -x 'find . -name package.yaml -type f -print | wc -l' -p)"
 }
 
 function usage() {
