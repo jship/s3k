@@ -418,13 +418,15 @@ generated if not present.
 
 We can tell `s3k` to regenerate a project's cache via running `s3k -C` from any
 directory at or under our `stack` project. You should only need to run this
-command when packages are added to or deleted from your monorepo.
+command when packages are added to or deleted from your monorepo, or when the
+available targets of an existing package change. A habit I've developed is to
+consider running `s3k -C` whenever I sync a repo's `main` branch into my local
+branch.
 
 ## End
 
 If you've made it this far, you know just about everything there is to know
-about using `s3k`. If start using the tool and have any feedback, please feel
-free to reach out on Github.
+about using `s3k`.
 
 Now go forth and type less!
 
