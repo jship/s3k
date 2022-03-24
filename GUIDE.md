@@ -229,7 +229,7 @@ very useful, e.g. for options like `--resolver`, `--stack-yaml`, etc.
 
 ## Environment variables
 
-We can set environment variables that are local to an `s3k` invocation` via the
+We can set environment variables that are local to an `s3k` invocation via the
 `-e` option:
 
 ```
